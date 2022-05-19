@@ -121,7 +121,7 @@ class BasicAgent(CaptureAgent):
     old_dist = self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), goal)
     print("Distance to my goal is " + str(old_dist))
     
-    best_dist = 0
+    best_dist = -1
     best_action = None
 
     for action in actions:
@@ -151,7 +151,7 @@ class OffensiveAgent(BasicAgent):
     actions = gameState.getLegalActions(self.index)
     print("Possible legal actions:")
     print(actions)
-    actions.remove('Stop')
+    actions.remove('Stop')  
 
     numInMouth = gameState.getAgentState(self.index).numCarrying
     
@@ -181,7 +181,7 @@ class OffensiveAgent(BasicAgent):
         myPos = gameState.getAgentState(self.index).getPosition()
         foodDist = [self.getMazeDistance(myPos, food) for food in foodList]
         minDistance = min(foodDist)
-        if numInMouth > 40 / minDistance:
+        if numInMouth > 40 / minDistance or numInMouth > 5:
           goal = standbyPos
           self.debugDraw([goal], [0,0,1], True)
         else:

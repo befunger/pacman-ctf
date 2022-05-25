@@ -77,6 +77,7 @@ class BasicAgent(CaptureAgent):
     '''
     Your initialization code goes here, if you need any.
     '''
+
     
 
   def getSuccessor(self, gameState, action):
@@ -92,8 +93,9 @@ class BasicAgent(CaptureAgent):
       return successor 
 
   def getActionTowardsPoint(self, gameState, actions, goal):
+    '''Calculates the best legal action to move towards a specific point'''
     old_dist = self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), goal)
-    print("Distance to my goal is " + str(old_dist))
+    #print("Distance to my goal is " + str(old_dist))
     
     best_dist = 9999
     best_action = None
@@ -118,8 +120,9 @@ class BasicAgent(CaptureAgent):
     return best_action
 
   def getActionAwayFromPoint(self, gameState, actions, goal):
+    '''Calculates the best legal action for getting away from a specific point'''
     old_dist = self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), goal)
-    print("Distance to my goal is " + str(old_dist))
+    #print("Distance to my goal is " + str(old_dist))
     
     best_dist = -1
     best_action = None
@@ -147,11 +150,18 @@ class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
 
   def chooseAction(self, gameState):
-    '''Save starting position'''
+    '''Picks the offensive agents next move given current state'''
+
     actions = gameState.getLegalActions(self.index)
     print("Possible legal actions:")
     print(actions)
     actions.remove('Stop')  
+
+    # Register base position
+    if self.homebase == None:
+      self.homebase = gameState.getAgentState(self.index).getPosition()
+      print("Home registered as: ")
+      print(self.homebase)
 
     numInMouth = gameState.getAgentState(self.index).numCarrying
     
@@ -161,18 +171,19 @@ class OffensiveAgent(BasicAgent):
     
     
     # If there's a defender close, we run away
-    standbyPos = (16.0, 11.0)
     positions = [a.getPosition() for a in defenders]
     dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in defenders]
-    if len(defenders) > 0:
-      print(dists)
-      if min(dists) < 5:
-        index_of_closest = dists.index(min(dists))
-        self.debugDraw([positions[index_of_closest]], [1,0,0], True)
-        return self.getActionAwayFromPoint(gameState, actions, positions[index_of_closest])
-      else:
-        self.debugDraw(standbyPos, [0.8,0.2,0], True)
-        return self.getActionTowardsPoint(gameState, actions, standbyPos)
+    dists.append(1000) #Avoids empty list if no enemies close
+
+    if min(dists) < 4:
+      index_of_closest = dists.index(min(dists))
+      self.debugDraw([positions[index_of_closest]], [0.5,0.5,0.5], True)
+      #return self.minMaxEscape(gameState, actions, positions[index_of_closest], 0)
+      return self.getActionAwayFromPoint(gameState, actions, positions[index_of_closest])
+
+    elif min(dists) < 7:
+      self.debugDraw(self.homebase, [0.8,0.2,0], True)
+      return self.getActionTowardsPoint(gameState, actions, self.homebase)
 
     else:
       # Get the position of the closest food as goal
@@ -182,27 +193,40 @@ class OffensiveAgent(BasicAgent):
         foodDist = [self.getMazeDistance(myPos, food) for food in foodList]
         minDistance = min(foodDist)
         if numInMouth > 40 / minDistance or numInMouth > 5:
-          goal = standbyPos
+          goal = self.homebase
           self.debugDraw([goal], [0,0,1], True)
         else:
           goal = foodList[foodDist.index(minDistance)] # Closest food as goal
           self.debugDraw([goal], [0,1,0], True)
       else:
-        goal = standbyPos
+        goal = self.homebase
         self.debugDraw([goal], [0.8,0.2,0], True)
       
       best_action = self.getActionTowardsPoint(gameState, actions, goal)
 
-    #print("Picked " + best_action)
+    print("Picked " + best_action)
     return best_action
 
+  def minMaxEscape(self, gameState, actions, goal, depth):
+    '''To be implemented!'''
+    if depth > 5:
+      return None #Return evaluated "score"
+    
 
 
 class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''
+  hasBeenPacman = False
 
   def chooseAction(self, gameState):
-    
+    '''Choses action for the defensive agent given the state'''
+    if (not self.hasBeenPacman) and gameState.getAgentState(self.index).isPacman:
+      self.hasBeenPacman = True
+      print("FINAL HOME POSITION SET TO: ")
+      print(self.homebase)
+    if self.hasBeenPacman == False:
+      self.homebase = gameState.getAgentState(self.index).getPosition()
+
     actions = gameState.getLegalActions(self.index)
     #print("Possible legal actions:")
     #print(actions)
@@ -217,12 +241,17 @@ class DefensiveAgent(BasicAgent):
       best_action = self.getActionTowardsPoint(gameState, actions, positions[index_of_closest])
     else:
       # Else, wait at dummy position (temporary fix)
-      goal = (18.0, 7.0)
+      if not self.hasBeenPacman:
+        foodList = self.getFood(gameState).asList()
+        myPos = gameState.getAgentState(self.index).getPosition()
+        foodDist = [self.getMazeDistance(myPos, food) for food in foodList]
+        minDistance = min(foodDist)
+        goal = foodList[foodDist.index(minDistance)] # Closest food as goal
+      else:
+        goal = self.homebase
+
       best_action = self.getActionTowardsPoint(gameState, actions, goal)
 
 
-    '''
-    You should change this in your own agent.
-    '''
     print("Picked " + best_action)
     return best_action

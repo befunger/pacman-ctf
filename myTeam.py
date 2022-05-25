@@ -78,8 +78,6 @@ class BasicAgent(CaptureAgent):
     Your initialization code goes here, if you need any.
     '''
 
-    
-
   def getSuccessor(self, gameState, action):
     """
     Finds the next successor which is a grid position (location tuple).
@@ -211,8 +209,6 @@ class OffensiveAgent(BasicAgent):
     '''To be implemented!'''
     if depth > 5:
       return None #Return evaluated "score"
-    
-
 
 class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''
@@ -251,7 +247,6 @@ class DefensiveAgent(BasicAgent):
         goal = self.homebase
 
       best_action = self.getActionTowardsPoint(gameState, actions, goal)
-
 
     print("Picked " + best_action)
     return best_action

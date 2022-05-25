@@ -44,8 +44,7 @@ def createTeam(firstIndex, secondIndex, isRed,
 
 ##########
 # Agents #
-##########
-
+##########  
 class BasicAgent(CaptureAgent):
   """
   A Dummy agent to serve as an example of the necessary agent structure.
@@ -53,6 +52,11 @@ class BasicAgent(CaptureAgent):
   create an agent as this is the bare minimum.
   """
   homebase = None
+  layout = None
+  currentState = None
+  # Potentially use this to consider the powerups and improve thinking
+  powerupLeft = True
+  powerupPosition = None
 
   def registerInitialState(self, gameState):
     """
@@ -74,9 +78,52 @@ class BasicAgent(CaptureAgent):
     CaptureAgent.registerInitialState in captureAgents.py.
     '''
     CaptureAgent.registerInitialState(self, gameState)
+    self.layout = self.stripLayout(gameState.data.layout)
     '''
     Your initialization code goes here, if you need any.
     '''
+  def getMovesFromLayout(self, pos):
+    '''Returns legal moves from position and stripped map (used for minmax)'''
+    #print("Checking position (" + str(pos[0]) + ", " + str(pos[1]) + ")")
+    x = int(-pos[1]-1)
+    y = int(pos[0]-1+1)
+    moves = []
+    if self.layout[x][y-1] == ' ':
+      moves.append('West')
+    #if self.layout[x][y] == ' ':
+    #  moves.append('Stop')
+    if self.layout[x][y+1] == ' ':
+      moves.append('East')
+    if self.layout[x-1][y] == ' ':
+      moves.append('North')
+    if self.layout[x+1][y] == ' ':
+      moves.append('South')
+    return moves
+
+  def stripLayout(self, layoutRaw):
+    '''Creates a layout map with only walls (%) and empty spaces (spacebar)'''
+    strippedLayout = []
+    layout = layoutRaw.layoutText
+    print("Original version:")
+    print(layout)
+    for row in layout:
+      newRow = ''
+      for i in range(len(row)):
+        if row[i] == '%':
+          newRow += '%'
+        else:
+          newRow += ' '
+      strippedLayout.append(newRow)
+    print("Stripped version:")
+    print(strippedLayout)
+    return layout
+
+  def updatePos(self, pos, action):
+    fromDirToCoordinate = {'Stop' : [0, 0], 'North' : [0, 1], 'South' : [0, -1], 'West' : [-1, 0], 'East' : [1, 0]}
+    change = fromDirToCoordinate[action]
+    change[0] += pos[0]
+    change[1] += pos[1]
+    return change
 
   def getSuccessor(self, gameState, action):
     """
@@ -149,15 +196,14 @@ class OffensiveAgent(BasicAgent):
 
   def chooseAction(self, gameState):
     '''Picks the offensive agents next move given current state'''
-
+    myPos = gameState.getAgentState(self.index).getPosition()
     actions = gameState.getLegalActions(self.index)
-    print("Possible legal actions:")
-    print(actions)
-    actions.remove('Stop')  
+    actions.remove('Stop')
+    self.currentState = gameState
 
     # Register base position
     if self.homebase == None:
-      self.homebase = gameState.getAgentState(self.index).getPosition()
+      self.homebase = myPos
       print("Home registered as: ")
       print(self.homebase)
 
@@ -173,15 +219,15 @@ class OffensiveAgent(BasicAgent):
     dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in defenders]
     dists.append(1000) #Avoids empty list if no enemies close
 
-    if min(dists) < 4:
+    if min(dists) < 5:
       index_of_closest = dists.index(min(dists))
       self.debugDraw([positions[index_of_closest]], [0.5,0.5,0.5], True)
-      #return self.minMaxEscape(gameState, actions, positions[index_of_closest], 0)
-      return self.getActionAwayFromPoint(gameState, actions, positions[index_of_closest])
+      return self.minMaxEscape(myPos, positions[index_of_closest], 6)
+      #return self.getActionAwayFromPoint(gameState, actions, positions[index_of_closest])
 
-    elif min(dists) < 7:
-      self.debugDraw(self.homebase, [0.8,0.2,0], True)
-      return self.getActionTowardsPoint(gameState, actions, self.homebase)
+    #elif min(dists) < 7:
+    #  self.debugDraw(self.homebase, [0.8,0.2,0], True)
+    #  return self.getActionTowardsPoint(gameState, actions, self.homebase)
 
     else:
       # Get the position of the closest food as goal
@@ -202,13 +248,71 @@ class OffensiveAgent(BasicAgent):
       
       best_action = self.getActionTowardsPoint(gameState, actions, goal)
 
-    print("Picked " + best_action)
+    #print("Picked " + best_action)
     return best_action
 
-  def minMaxEscape(self, gameState, actions, goal, depth):
-    '''To be implemented!'''
-    if depth > 5:
-      return None #Return evaluated "score"
+  def minMaxEscape(self, myPos, enemyPos, maxDepth):
+    '''Uses minmax algorithm to pick best moves to escape'''
+    print("ENGAGINGING MINMAX ESCAPE WITH DEPTH " + str(maxDepth))
+    ownActions = self.getMovesFromLayout(myPos)
+    bestScore = -100
+    bestMove = 'Stop'
+
+    for action in ownActions:
+      newPos = self.updatePos(myPos, action)
+      moveScore = self.minMove(newPos, enemyPos, maxDepth-1)
+      if moveScore > bestScore:
+        bestMove = action
+        bestScore = moveScore
+    return bestMove #Returns move that gives best node given optimal play from both sides
+
+  def minMove(self, myPos, enemyPos, depth):
+    if depth <= 0:
+      #print("*"*(3-depth) + " bottomed out")
+      return self.evaluationScore(myPos, enemyPos) # Max depth heuristic
+    
+    if myPos[0] == enemyPos[0] and myPos[1] == enemyPos[1]:
+      return -100 # We are on the enemy and die. This is bad!
+
+    enemyActions = self.getMovesFromLayout(enemyPos)
+    lowestScore = 10000
+    bestMove = None
+    for action in enemyActions:
+      print("*"*(6-depth) + " enemy goes " + action)
+      newPos = self.updatePos(enemyPos, action)
+      moveScore = self.maxMove(myPos, newPos, depth-1)
+      if moveScore < lowestScore:
+        bestMove = action
+        lowestScore = moveScore
+    return lowestScore #The enemy will pick the move that gives the lowest score (enemy closest to us)
+
+  def maxMove(self, myPos, enemyPos, depth):
+    if depth <= 0:
+      #print("*"*(3-depth) + " bottomed out")
+      return self.evaluationScore(myPos, enemyPos) # Max depth heuristic
+
+    if myPos[0] == enemyPos[0] and myPos[1] == enemyPos[1]:
+      return -100 # We are on the enemy and die. This is bad!
+
+    ownActions = self.getMovesFromLayout(myPos)
+    bestScore = -1
+    bestMove = None
+    for action in ownActions:
+      print("*"*(6-depth) + " friend goes " + action)
+      newPos = self.updatePos(myPos, action)
+      moveScore = self.minMove(newPos, enemyPos, depth-1)
+      if moveScore > bestScore:
+        bestMove = action
+        bestScore = moveScore
+    return bestScore #We will pick the move that gives the highest score (greatest distance)
+  
+  def evaluationScore(self, myPos, enemyPos):
+    myPos = (myPos[0], myPos[1])
+    enemyPos = (enemyPos[0], enemyPos[1])
+    distToEnemy = self.getMazeDistance(myPos, enemyPos)
+    #distToHome = self.getMazeDistance(myPos, self.homebase)
+
+    return distToEnemy
 
 class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''
@@ -216,12 +320,15 @@ class DefensiveAgent(BasicAgent):
 
   def chooseAction(self, gameState):
     '''Choses action for the defensive agent given the state'''
+    self.currentState = gameState
+
     if (not self.hasBeenPacman) and gameState.getAgentState(self.index).isPacman:
       self.hasBeenPacman = True
       print("FINAL HOME POSITION SET TO: ")
       print(self.homebase)
     if self.hasBeenPacman == False:
-      self.homebase = gameState.getAgentState(self.index).getPosition()
+      prev = self.getPreviousObservation()
+      self.homebase = (prev if prev != None else gameState).getAgentState(self.index).getPosition()
 
     actions = gameState.getLegalActions(self.index)
     #print("Possible legal actions:")
@@ -248,5 +355,5 @@ class DefensiveAgent(BasicAgent):
 
       best_action = self.getActionTowardsPoint(gameState, actions, goal)
 
-    print("Picked " + best_action)
+    #print("Picked " + best_action)
     return best_action

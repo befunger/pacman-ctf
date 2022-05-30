@@ -53,13 +53,12 @@ class BasicAgent(CaptureAgent):
   You should look at baselineTeam.py for more details about how to
   create an agent as this is the bare minimum.
   """
-  homebase = None
-  layout = None
-  currentState = None
-  defenders = None
+  homebase = None         # Starting position
+  layout = None           # A simple map of the currrent layout with only walls (% symbol) and non-walls (blank space)
+  currentState = None     # The current gamestate
+  defenders = None        # List of visible enemy agents on their own field half
+  ownBoundary = None      # List of locations (x, y) that form our boundary against the enemy half of the field
   # Potentially use this to consider the powerups and improve thinking
-  powerupLeft = True
-  powerupPosition = None
 
   def registerInitialState(self, gameState):
     """
@@ -82,9 +81,34 @@ class BasicAgent(CaptureAgent):
     '''
     CaptureAgent.registerInitialState(self, gameState)
     self.layout = self.stripLayout(gameState.data.layout)
-    '''
-    Your initialization code goes here, if you need any.
-    '''
+    self.ownBoundary = self.getBoundary(gameState)
+
+
+
+  def getBoundary(self, gameState):
+    '''Compiles all boundary points (where our half of the field meets the enemy field'''
+    height = len(self.layout)
+    width = len(self.layout[0])
+    pos = gameState.getAgentState(self.index).getPosition() # Agent starting position
+
+    # If starting on the left side our boundary is on the left line
+    bound_x = width/2 -1 if pos[0] < width/2 else width/2
+    #print("Boundary at bound_x")
+
+    # Gets all points (bound_x, y) on the boundary that aren't walls
+    boundary = [(bound_x, i) for i in range(height) if self.layout[-i-1][bound_x] == ' ']
+    #print(boundary)
+
+    self.debugDraw(boundary, [0.0, 1.0, 0.7], False)
+    return boundary
+  
+  def getClosestBoundary(self, pos):
+
+    dists = [self.getMazeDistance(pos, a) for a in self.ownBoundary]
+    closestBoundary = self.ownBoundary[dists.index(min(dists))]
+    #self.debugDraw([closestBoundary], [0.5,0.5,0.5], False)
+    return closestBoundary
+
   def getMovesFromLayout(self, pos):
     '''Returns legal moves from position and stripped map (used for minmax)'''
     #print("Checking position (" + str(pos[0]) + ", " + str(pos[1]) + ")")
@@ -196,19 +220,25 @@ class BasicAgent(CaptureAgent):
 
 class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
+  goingHome = False  # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
+  foodToChase = None  # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
 
   def chooseAction(self, oldGameState):
     '''Picks the offensive agents next move given current state'''
     gameState = self.getSuccessor(oldGameState, 'Stop')
 
+    # If we are on our own field, we have finished going home 
+    if not gameState.getAgentState(self.index).isPacman:
+      self.goingHome = False
+
     myPos = gameState.getAgentState(self.index).getPosition()
     actions = gameState.getLegalActions(self.index)
-    actions.remove('Stop')
+    actions.remove('Stop') # Never allow standing still (does not really contribute to anything)
     self.currentState = gameState
 
     self.debugDraw([myPos], [1.0,1.0,1.0], True)
 
-    # Register base position
+    # Register base position at the start of the game
     if self.homebase == None:
       self.homebase = myPos
       print("Home registered as: ")
@@ -225,15 +255,15 @@ class OffensiveAgent(BasicAgent):
     dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in defenders]
     dists.append(1000) #Avoids empty list if no enemies close
 
-    if min(dists) < 5:
+    if min(dists) < 4:
       self.defenders = defenders # This is saved for the minmax heuristic (Recalculating every time is wasteful)
 
       index_of_closest = dists.index(min(dists))
       self.debugDraw([positions[index_of_closest]], [0.5,0.5,0.5], False)
-      return self.minMaxEscape(myPos, positions[index_of_closest], 11)
+      return self.minMaxEscape(myPos, positions[index_of_closest], 9)
       #return self.getActionAwayFromPoint(gameState, actions, positions[index_of_closest])
 
-    #elif min(dists) < 7:
+    #elif min(dists) < 5:
     #  self.debugDraw(self.homebase, [0.8,0.2,0], True)
     #  return self.getActionTowardsPoint(gameState, actions, self.homebase)
 
@@ -244,8 +274,8 @@ class OffensiveAgent(BasicAgent):
         myPos = gameState.getAgentState(self.index).getPosition()
         foodDist = [self.getMazeDistance(myPos, food) for food in foodList]
         minDistance = min(foodDist)
-        if numInMouth > 40 / minDistance or numInMouth > 5:
-          goal = self.homebase
+        if numInMouth > 40 / minDistance or numInMouth > 7:
+          goal = self.getClosestBoundary(myPos)
           self.debugDraw([goal], [0,0,1], False)
         else:
           goal = foodList[foodDist.index(minDistance)] # Closest food as goal
@@ -261,7 +291,7 @@ class OffensiveAgent(BasicAgent):
 
   def minMaxEscape(self, myPos, enemyPos, maxDepth):
     '''Uses minmax algorithm to pick best moves to escape'''
-    print("ENGAGINGING MINMAX ESCAPE WITH DEPTH " + str(maxDepth))
+    print("Calling MINMAX with depth " + str(maxDepth))
     #print("Starting pos has player at (" + str(myPos[0]) + ", " + str(myPos[1]) + ") and enemy at (" + str(enemyPos[0]) + ", " + str(enemyPos[1]) + ")")
     ownActions = self.getMovesFromLayout(myPos)
     #print(str(ownActions) + " when friend at (" + str(myPos[0]) + ", " + str(myPos[1]) + ")")
@@ -333,12 +363,13 @@ class OffensiveAgent(BasicAgent):
     myPos = (myPos[0], myPos[1])
     enemyPos = (enemyPos[0], enemyPos[1])
     distToEnemy = self.getMazeDistance(myPos, enemyPos)
-    distToHome = self.getMazeDistance(myPos, self.homebase)
+    boundaryPoint = self.getClosestBoundary(myPos)
+    distToHomeField = self.getMazeDistance(myPos, boundaryPoint)
     
     #dists = [self.getMazeDistance(myPos, a.getPosition()) for a in self.defenders]
     #dists = [dist for dist in dists if dist < 5]
 
-    return distToEnemy + 1.0/distToHome #+ sum(dists)
+    return distToEnemy + 1.0/(distToHomeField + 5) #+ sum(dists)
 
 class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''

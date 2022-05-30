@@ -1,5 +1,4 @@
-# myTeam.py
-# ---------
+
 # Licensing Information:  You are free to use or extend these projects for
 # educational purposes provided that (1) you do not distribute or publish
 # solutions, (2) you retain this notice, and (3) you provide clear
@@ -22,10 +21,7 @@ from util import nearestPoint
 # Team creation #
 #################
 
-def createTeam(firstIndex, secondIndex, isRed,
-               first = 'OffensiveAgent', second = 'DefensiveAgent'):
-               #first = 'OffensiveAgent', second = 'OffensiveAgent'):
-               
+def createTeam(firstIndex, secondIndex, isRed, first = 'OffensiveAgent', second = 'DefensiveAgent'):
   """
   This function should return a list of two agents that will form the
   team, initialized using firstIndex and secondIndex as their agent
@@ -115,6 +111,7 @@ class BasicAgent(CaptureAgent):
     closestBoundary = self.ownBoundary[dists.index(min(dists))]
     #self.debugDraw([closestBoundary], [0.5,0.5,0.5], False)
     return closestBoundary
+
 
   def registerCapsules(self, gameState, width):
     capsules = gameState.data.layout.capsules
@@ -240,7 +237,9 @@ class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
   goingHome = False     # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
   foodToChase = None    # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
+  verbose = False
   
+
   def chooseAction(self, oldGameState):
     '''Picks the offensive agents next move given current state'''
     gameState = self.getSuccessor(oldGameState, 'Stop')
@@ -256,13 +255,13 @@ class OffensiveAgent(BasicAgent):
 
     self.debugDraw([myPos], [1.0,1.0,1.0], True)
     self.debugDraw(self.ownCapsules, [0,0,1])
-    self.debugDraw(self.enemyCapsules, [1,0,0])
+    #self.debugDraw(self.enemyCapsules, [1,0,0])
 
     # Register base position at the start of the game
     if self.homebase == None:
       self.homebase = myPos
-      print("Home registered as: ")
-      print(self.homebase)
+      if self.verbose: print("Home registered as: ")
+      if self.verbose: print(self.homebase)
 
     numInMouth = gameState.getAgentState(self.index).numCarrying
     # Checks if any ghost is nearby
@@ -311,7 +310,7 @@ class OffensiveAgent(BasicAgent):
 
   def minMaxEscape(self, myPos, enemyPos, maxDepth):
     '''Uses minmax algorithm to pick best moves to escape'''
-    print("Calling MINMAX with depth " + str(maxDepth))
+    if self.verbose: print("Calling MINMAX with depth " + str(maxDepth))
     #print("Starting pos has player at (" + str(myPos[0]) + ", " + str(myPos[1]) + ") and enemy at (" + str(enemyPos[0]) + ", " + str(enemyPos[1]) + ")")
     ownActions = self.getMovesFromLayout(myPos)
     #print(str(ownActions) + " when friend at (" + str(myPos[0]) + ", " + str(myPos[1]) + ")")
@@ -326,7 +325,7 @@ class OffensiveAgent(BasicAgent):
       if moveScore > bestScore:
         bestMove = action
         bestScore = moveScore
-    print(bestMove + " picked.")
+    if self.verbose: print(bestMove + " picked.")
 
     return bestMove #Returns move that gives best node given optimal play from both sides
 
@@ -394,46 +393,384 @@ class OffensiveAgent(BasicAgent):
 class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''
   hasBeenPacman = False
+  lastMissingFood = None
+  protectCapsule = None
+  verbose = True
+  algo = 1
+  if verbose: print("Algorithm: ", algo)
 
   def chooseAction(self, oldGameState):
-    '''Choses action for the defensive agent given the state'''
-    gameState = self.getSuccessor(oldGameState, 'Stop')
+    '''Choses action for the defensive agent given the state'''  
+    # Algorithm 1: Protect boundary 
+    if self.algo==1:
+        gameState = self.getSuccessor(oldGameState, 'Stop')
+        self.currentState = gameState
 
-    self.currentState = gameState
+        goToBoundary = False
+        # is agent in home ground?
+        if gameState.getAgentState(self.index).isPacman == False:
+            # is agent scared?
+            if gameState.getAgentState(self.index).scaredTimer > 0:
+                # move towards boundary
+                goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                if self.verbose: print("Scared! Go to boundary... ")
+            else:
+                # check if enemies in home 
+                enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
+                invaders = [a for a in enemies if a.isPacman]
+                if len(invaders)> 0:
+                    if self.verbose: print("Enemy in home")
+                    # check for visible enemies
+                    visible_invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
+                    if len(visible_invaders) > 0: 
+                        # Pick the action that closes the distance to the nearest invader
+                        positions = [a.getPosition() for a in visible_invaders]
+                        dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in visible_invaders]
+                        index_of_closest = dists.index(min(dists))
+                        goal = positions[index_of_closest]
+                        if self.verbose: print("Chasing closest visible enemies ...")
+                    else:
+                        # check for missing food
+                        if self.missingFood(gameState):
+                            goal = self.lastMissingFood
+                            if self.verbose: print("Chasing invisible enemies ...")
+                        elif self.lastMissingFood!=None:
+                            goal = self.lastMissingFood
+                            if self.verbose: print("Chasing invisible enemies ...")
+                        elif self.capsuleAvailable(gameState):
+                            goal = self.protectCapsule
+                            if self.verbose: print("Protecting capsule ...")
+                        else:
+                            # move towards boundary
+                            goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                            if self.verbose: print("Protecting boundary... ")           
+                else:
+                    # move towards boundary
+                    goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                    if self.verbose: print("Protecting boundary... ")
+        else:
+            # move towards boundary
+            goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+            if self.verbose: print("Not in home! Go to boundary... ")
+            
+        if self.verbose: print(goal)
+        if self.verbose: self.debugDraw([goal], [0,1,1], False)
+        actions = gameState.getLegalActions(self.index)
+        best_action = self.getActionTowardsPoint(gameState, actions, goal)
 
-    if (not self.hasBeenPacman) and gameState.getAgentState(self.index).isPacman:
-      self.hasBeenPacman = True
-      print("FINAL HOME POSITION SET TO: ")
-      print(self.homebase)
 
-    if self.hasBeenPacman == False:
-      prev = self.getPreviousObservation()
-      self.homebase = (prev if prev != None else gameState).getAgentState(self.index).getPosition()
+    # Algorithm 2: Protect power capsules
+    elif self.algo==2:
+        gameState = self.getSuccessor(oldGameState, 'Stop')
+        self.currentState = gameState
 
-    actions = gameState.getLegalActions(self.index)
-    #print("Possible legal actions:")
-    #print(actions)
-    # Find all enemies that are on our side of the field and visible
-    enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
-    invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
-    if len(invaders) > 0:
-      # Pick the action that closes the distance to the nearest invader
-      positions = [a.getPosition() for a in invaders]
-      dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in invaders]
-      index_of_closest = dists.index(min(dists))
-      best_action = self.getActionTowardsPoint(gameState, actions, positions[index_of_closest])
-    else:
-      # Else, wait at dummy position (temporary fix)
-      if not self.hasBeenPacman:
-        foodList = self.getFood(gameState).asList()
-        myPos = gameState.getAgentState(self.index).getPosition()
-        foodDist = [self.getMazeDistance(myPos, food) for food in foodList]
-        minDistance = min(foodDist)
-        goal = foodList[foodDist.index(minDistance)] # Closest food as goal
-      else:
-        goal = self.homebase
+        goToBoundary = False
+        # is agent in home ground?
+        if gameState.getAgentState(self.index).isPacman == False:
+            # is agent scared?
+            if gameState.getAgentState(self.index).scaredTimer > 0:
+                # move towards boundary
+                goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                if self.verbose: print("Scared! Go to boundary... ")
+            else:
+                # check if enemies in home 
+                enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
+                invaders = [a for a in enemies if a.isPacman]
+                if len(invaders)> 0:
+                    # check for visible enemies
+                    visible_invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
+                    if len(visible_invaders) > 0: 
+                        # Pick the action that closes the distance to the nearest invader
+                        positions = [a.getPosition() for a in visible_invaders]
+                        dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in visible_invaders]
+                        index_of_closest = dists.index(min(dists))
+                        goal = positions[index_of_closest]
+                        if self.verbose: print("Chasing closest visible enemies ...")
+                    else:
+                        # check for missing food
+                        if self.missingFood(gameState):
+                            goal = self.lastMissingFood
+                            if self.verbose: print("Chasing invisible enemies ...")
+                        elif self.capsuleAvailable(gameState):
+                            goal = self.protectCapsule
+                            if self.verbose: print("Protecting capsule ...")
+                        elif self.lastMissingFood!=None:
+                            goal = self.lastMissingFood
+                            if self.verbose: print("Chasing invisible enemies ...")
+                        else:
+                            # move towards boundary
+                            goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                            if self.verbose: print("Protecting boundary... ")        
+                else:
+                    # protect capsule
+                    if self.capsuleAvailable(gameState):
+                        goal = self.protectCapsule
+                        if self.verbose: print("Protecting capsule ...")
+                    else:
+                        # move towards boundary
+                        goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                        if self.verbose: print("Protecting boundary... ")
+        else:
+            # move towards boundary
+            goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+            if self.verbose: print("Go to boundary... ")
+            
+        if self.verbose: print(goal)
+        if self.verbose: self.debugDraw([goal], [0,1,1], False)
+        actions = gameState.getLegalActions(self.index)
+        best_action = self.getActionTowardsPoint(gameState, actions, goal)
 
-      best_action = self.getActionTowardsPoint(gameState, actions, goal)
 
-    #print("Picked " + best_action)
+    # default algo
+    else: 
+        gameState = self.getSuccessor(oldGameState, 'Stop')
+        self.currentState = gameState
+
+        if (not self.hasBeenPacman) and gameState.getAgentState(self.index).isPacman:
+          self.hasBeenPacman = True
+          if self.verbose: print("FINAL HOME POSITION SET TO: ")
+          print(self.homebase)
+
+        if self.hasBeenPacman == False:
+          prev = self.getPreviousObservation()
+          self.homebase = (prev if prev != None else gameState).getAgentState(self.index).getPosition()
+
+        actions = gameState.getLegalActions(self.index)
+
+        # Find all enemies that are on our side of the field and visible
+        enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
+        invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
+        if len(invaders) > 0:
+          # Pick the action that closes the distance to the nearest invader
+          positions = [a.getPosition() for a in invaders]
+          dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in invaders]
+          index_of_closest = dists.index(min(dists))
+          best_action = self.getActionTowardsPoint(gameState, actions, positions[index_of_closest])
+        else:
+          # Else, wait at dummy position (temporary fix)
+          if not self.hasBeenPacman:
+            foodList = self.getFood(gameState).asList()
+            myPos = gameState.getAgentState(self.index).getPosition()
+            foodDist = [self.getMazeDistance(myPos, food) for food in foodList]
+            minDistance = min(foodDist)
+            goal = foodList[foodDist.index(minDistance)] # Closest food as goal
+          else:
+            goal = self.homebase
+
+          best_action = self.getActionTowardsPoint(gameState, actions, goal)
+    
+    
     return best_action
+
+  def missingFood(self, gameState):
+    '''finds where food goes missing'''
+    prevState = self.getPreviousObservation()
+    prevFoods = self.getFoodYouAreDefending(prevState).asList()
+    currFoods = self.getFoodYouAreDefending(gameState).asList()
+    if len(prevFoods) != len(currFoods):
+        for food in prevFoods:
+            if food not in currFoods:
+                self.lastMissingFood = food
+        return True
+    else:
+        return False
+
+  def capsuleAvailable(self, gameState):
+    '''finds if any capsule available'''
+    currFoods = self.getCapsulesYouAreDefending(gameState)
+    if len(currFoods) > 0:
+        self.protectCapsule = currFoods[0]
+        return True
+    else:
+        return False
+
+
+
+
+
+
+class HMM:
+  '''implements an HMM'''
+   
+  def _init_(self, N, M, variance):
+        """
+        Initialize A, B, pi
+        N - no of states in HMM model
+        M - no of observations
+        """
+        self.A = [[0.0 for j in range(N)] for i in range(N)]
+        self.B = [[0.0 for j in range(M)] for i in range(N)]
+        self.pi = [[0.0 for j in range(N)]]
+        
+        for i in range(N):
+            row_sch = 0
+            for j in range(N-1):
+                self.A[i][j]= abs(random.gauss(1/N, variance))
+                row_sch += self.A[i][j]
+            self.A[i][N-1] = 1 - row_sch
+            
+            row_sch = 0
+            for j in range(M-1):
+                self.B[i][j]= abs(random.gauss(1/M, variance))
+                row_sch += self.B[i][j]
+            self.B[i][M-1] = 1 - row_sch
+        
+        row_sch = 0
+        for j in range(N-1):
+            self.pi[0][j]= abs(random.gauss(1/N, variance))
+            row_sch += self.pi[0][j]
+        self.pi[0][N-1] = 1 - row_sch    
+            
+        return A, B, pi
+
+  def alphaPass(self, A, B, pi, O):
+    """
+    computes alpha matrix and list of scaling coefficients C
+    """
+    #alpha: T*N matrix
+    T = len(O)
+    N = len(A)
+    alpha = [[0.0 for j in range(N)] for t in range(T)]
+    C = [0.0 for t in range(T)]
+
+    #initialize alpha0
+    for i in range(N):
+        alpha[0][i] = pi[0][i] * B[i][O[0]]
+        C[0] += alpha[0][i]
+
+    #scale alpha0
+    C[0] = 1/C[0]
+    for i in range(N):
+        alpha[0][i] = C[0] * alpha[0][i]
+
+    #compute alpha
+    for t in range(1, T):
+        for i in range(N):
+            for j in range(N):
+                alpha[t][i] += A[j][i] * alpha[t-1][j]
+            alpha[t][i] = alpha[t][i] * B[i][O[t]]
+            C[t] += alpha[t][i]
+        #scale
+        C[t] = 1/C[t]
+        for i in range(N):
+            alpha[t][i] = C[t] * alpha[t][i]
+
+    return alpha, C
+
+  def evaluate(self, C):
+    """
+    computes log probability of given the normalization coefficients
+    """
+    T = len(C)
+    logProb = 0.0
+
+    for t in range(T):
+        logProb += math.log(C[t])
+
+    logProb = -1.0 * logProb
+    return logProb
+
+  def betaPass(self, A, B, pi, O, C):
+    """
+    computes beta given the model, observations and normalization coefficients
+    C is from alpha pass
+    """
+    T = len(O)
+    N = len(A)
+    beta = [[0.0 for j in range(N)] for t in range(T)]
+
+    #initialize
+    for i in range(N):
+        beta[T-1][i] = C[T-1]
+
+    #compute beta
+    for t in range(T-2, -1, -1):
+        for i in range(N):
+            for j in range(N):
+                beta[t][i] += A[i][j] * B[j][O[t+1]] * beta[t+1][j]
+            #scale
+            beta[t][i] = C[t] * beta[t][i]
+
+    return beta
+
+  def gammaPass(self, A, B, pi, O, alpha, beta):
+    """
+    computes di-gamma and gamma functions
+    """
+    T = len(O)
+    N = len(A)
+    gamma = [[0.0 for j in range(N)] for t in range(T)]
+    digamma = [[[0.0 for j in range(N)] for i in range(N)] for t in range(T-1)]
+
+    #compute gamma and digamma
+    for t in range(T-1):
+        for i in range(N):
+            for j in range(N):
+                digamma[t][i][j] = alpha[t][i] * A[i][j] * B[j][O[t+1]] * beta[t+1][j]
+                gamma[t][i] += digamma[t][i][j]
+
+    #compute gamma T-1
+    for i in range(N):
+        gamma[T-1][i] = alpha[T-1][i]
+
+    return gamma, digamma
+
+  def update(self, A, B, pi, O, gamma, digamma):
+    """
+    updates A, B, pi using gamma and digamma
+    """
+    T = len(O)
+    N = len(A)
+    M = len(B[0])
+
+    #update pi
+    pi[0] = gamma[0]
+
+    #update A
+    for i in range(N):
+        denom = 0
+        for t in range(T-1):
+            denom += gamma[t][i]
+        for j in range(N):
+            numer = 1e-6
+            for t in range(T-1):
+                numer += digamma[t][i][j]
+            A[i][j] = numer/denom
+
+    #update B
+    for i in range(N):
+        denom = 0
+        for t in range(T-1):
+            denom += gamma[t][i]
+        for j in range(M):
+            numer = 1e-6
+            for t in range(T-1):
+                if (O[t] == j):
+                    numer += gamma[t][i]
+            B[i][j] = numer/denom
+
+    return A, B, pi
+    
+  def learn(self, A, B, pi, O):
+    """
+    learns A, B, pi from observations
+    """
+    iters = 0
+    maxIters = 100
+    oldLogProb = -math.inf
+
+    alpha, C = self.alphaPass(A, B, pi, O)
+    logProb = self.evaluate(C)
+
+    while(iters < maxIters and logProb - oldLogProb > 1e-4):
+        oldLogProb = logProb
+
+        beta = self.betaPass(A, B, pi, O, C)
+        gamma, digamma = self.gammaPass(A, B, pi, O, alpha, beta)
+        A, B, pi = self.update(A, B, pi, O, gamma, digamma)
+
+        alpha, C = self.alphaPass(A, B, pi, O)
+        logProb = self.evaluate(C)
+        iters += 1
+
+    return A, B, pi

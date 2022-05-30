@@ -23,7 +23,7 @@ from util import nearestPoint
 #################
 
 def createTeam(firstIndex, secondIndex, isRed,
-               first = 'OffensiveAgent', second = 'DefensiveAgent'):
+               first = 'OffensiveAgent', second = 'OffensiveAgent'):
                #first = 'OffensiveAgent', second = 'OffensiveAgent'):
                
   """
@@ -56,7 +56,6 @@ class BasicAgent(CaptureAgent):
   homebase = None
   layout = None
   currentState = None
-  defenders = None
   # Potentially use this to consider the powerups and improve thinking
   powerupLeft = True
   powerupPosition = None
@@ -226,11 +225,9 @@ class OffensiveAgent(BasicAgent):
     dists.append(1000) #Avoids empty list if no enemies close
 
     if min(dists) < 5:
-      self.defenders = defenders # This is saved for the minmax heuristic (Recalculating every time is wasteful)
-
       index_of_closest = dists.index(min(dists))
       self.debugDraw([positions[index_of_closest]], [0.5,0.5,0.5], False)
-      return self.minMaxEscape(myPos, positions[index_of_closest], 11)
+      return self.minMaxEscape(myPos, positions[index_of_closest], 5)
       #return self.getActionAwayFromPoint(gameState, actions, positions[index_of_closest])
 
     #elif min(dists) < 7:
@@ -272,11 +269,10 @@ class OffensiveAgent(BasicAgent):
       #print("* friend goes " + action)
       newPos = self.updatePos(myPos, action)
       moveScore = self.minMove(newPos, enemyPos, maxDepth-1, alpha=-10000, beta=10000)
-      print(action + " gives score " + str(moveScore))
       if moveScore > bestScore:
         bestMove = action
         bestScore = moveScore
-    print(bestMove + " picked.")
+    print("Moving " + bestMove + " puts me at distance " + str(bestScore))
 
     return bestMove #Returns move that gives best node given optimal play from both sides
 
@@ -334,11 +330,8 @@ class OffensiveAgent(BasicAgent):
     enemyPos = (enemyPos[0], enemyPos[1])
     distToEnemy = self.getMazeDistance(myPos, enemyPos)
     distToHome = self.getMazeDistance(myPos, self.homebase)
-    
-    #dists = [self.getMazeDistance(myPos, a.getPosition()) for a in self.defenders]
-    #dists = [dist for dist in dists if dist < 5]
-
-    return distToEnemy + 1.0/distToHome #+ sum(dists)
+    #print("score be " + str(distToEnemy + 1.0/distToHome))
+    return distToEnemy + 1.0/distToHome
 
 class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''
@@ -354,7 +347,6 @@ class DefensiveAgent(BasicAgent):
       self.hasBeenPacman = True
       print("FINAL HOME POSITION SET TO: ")
       print(self.homebase)
-
     if self.hasBeenPacman == False:
       prev = self.getPreviousObservation()
       self.homebase = (prev if prev != None else gameState).getAgentState(self.index).getPosition()

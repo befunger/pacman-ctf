@@ -24,6 +24,8 @@ from util import nearestPoint
 
 def createTeam(firstIndex, secondIndex, isRed,
                first = 'OffensiveAgent', second = 'DefensiveAgent'):
+               #first = 'OffensiveAgent', second = 'OffensiveAgent'):
+               
   """
   This function should return a list of two agents that will form the
   team, initialized using firstIndex and secondIndex as their agent
@@ -116,7 +118,7 @@ class BasicAgent(CaptureAgent):
       strippedLayout.append(newRow)
     print("Stripped version:")
     print(strippedLayout)
-    return layout
+    return strippedLayout
 
   def updatePos(self, pos, action):
     fromDirToCoordinate = {'Stop' : [0, 0], 'North' : [0, 1], 'South' : [0, -1], 'West' : [-1, 0], 'East' : [1, 0]}
@@ -194,12 +196,16 @@ class BasicAgent(CaptureAgent):
 class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
 
-  def chooseAction(self, gameState):
+  def chooseAction(self, oldGameState):
     '''Picks the offensive agents next move given current state'''
+    gameState = self.getSuccessor(oldGameState, 'Stop')
+
     myPos = gameState.getAgentState(self.index).getPosition()
     actions = gameState.getLegalActions(self.index)
     actions.remove('Stop')
     self.currentState = gameState
+
+    self.debugDraw([myPos], [1.0,1.0,1.0], True)
 
     # Register base position
     if self.homebase == None:
@@ -208,7 +214,6 @@ class OffensiveAgent(BasicAgent):
       print(self.homebase)
 
     numInMouth = gameState.getAgentState(self.index).numCarrying
-    
     # Checks if any ghost is nearby
     enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
     defenders = [a for a in enemies if (not a.isPacman) and a.getPosition() != None]
@@ -221,8 +226,8 @@ class OffensiveAgent(BasicAgent):
 
     if min(dists) < 5:
       index_of_closest = dists.index(min(dists))
-      self.debugDraw([positions[index_of_closest]], [0.5,0.5,0.5], True)
-      return self.minMaxEscape(myPos, positions[index_of_closest], 6)
+      self.debugDraw([positions[index_of_closest]], [0.5,0.5,0.5], False)
+      return self.minMaxEscape(myPos, positions[index_of_closest], 5)
       #return self.getActionAwayFromPoint(gameState, actions, positions[index_of_closest])
 
     #elif min(dists) < 7:
@@ -238,13 +243,13 @@ class OffensiveAgent(BasicAgent):
         minDistance = min(foodDist)
         if numInMouth > 40 / minDistance or numInMouth > 5:
           goal = self.homebase
-          self.debugDraw([goal], [0,0,1], True)
+          self.debugDraw([goal], [0,0,1], False)
         else:
           goal = foodList[foodDist.index(minDistance)] # Closest food as goal
-          self.debugDraw([goal], [0,1,0], True)
+          self.debugDraw([goal], [0,1,0], False)
       else:
         goal = self.homebase
-        self.debugDraw([goal], [0.8,0.2,0], True)
+        self.debugDraw([goal], [0.8,0.2,0], False)
       
       best_action = self.getActionTowardsPoint(gameState, actions, goal)
 
@@ -254,72 +259,88 @@ class OffensiveAgent(BasicAgent):
   def minMaxEscape(self, myPos, enemyPos, maxDepth):
     '''Uses minmax algorithm to pick best moves to escape'''
     print("ENGAGINGING MINMAX ESCAPE WITH DEPTH " + str(maxDepth))
+    #print("Starting pos has player at (" + str(myPos[0]) + ", " + str(myPos[1]) + ") and enemy at (" + str(enemyPos[0]) + ", " + str(enemyPos[1]) + ")")
     ownActions = self.getMovesFromLayout(myPos)
+    #print(str(ownActions) + " when friend at (" + str(myPos[0]) + ", " + str(myPos[1]) + ")")
     bestScore = -100
     bestMove = 'Stop'
 
     for action in ownActions:
+      #print("* friend goes " + action)
       newPos = self.updatePos(myPos, action)
-      moveScore = self.minMove(newPos, enemyPos, maxDepth-1)
+      moveScore = self.minMove(newPos, enemyPos, maxDepth-1, alpha=-10000, beta=10000)
       if moveScore > bestScore:
         bestMove = action
         bestScore = moveScore
+    print("Moving " + bestMove + " puts me at distance " + str(bestScore))
+
     return bestMove #Returns move that gives best node given optimal play from both sides
 
-  def minMove(self, myPos, enemyPos, depth):
+  def minMove(self, myPos, enemyPos, depth, alpha, beta):
     if depth <= 0:
       #print("*"*(3-depth) + " bottomed out")
       return self.evaluationScore(myPos, enemyPos) # Max depth heuristic
     
     if myPos[0] == enemyPos[0] and myPos[1] == enemyPos[1]:
-      return -100 # We are on the enemy and die. This is bad!
+      #print("~Enemy walked into us, score -1")
+      return -1 # We are on the enemy and die. This is bad!
 
     enemyActions = self.getMovesFromLayout(enemyPos)
+    #print("*"*(6-depth) + str(enemyActions) + " when enemy at (" + str(enemyPos[0]) + ", " + str(enemyPos[1]) + ")")
     lowestScore = 10000
-    bestMove = None
     for action in enemyActions:
-      print("*"*(6-depth) + " enemy goes " + action)
+      #print("*"*(6-depth) + " enemy goes " + action)
       newPos = self.updatePos(enemyPos, action)
-      moveScore = self.maxMove(myPos, newPos, depth-1)
-      if moveScore < lowestScore:
-        bestMove = action
-        lowestScore = moveScore
+      moveScore = self.maxMove(myPos, newPos, depth-1, alpha, beta)
+      lowestScore = min(moveScore, lowestScore)
+      if lowestScore <= alpha: # Alpha pruning
+        return lowestScore
+      else:
+        beta = min(beta, lowestScore)
+
     return lowestScore #The enemy will pick the move that gives the lowest score (enemy closest to us)
 
-  def maxMove(self, myPos, enemyPos, depth):
+  def maxMove(self, myPos, enemyPos, depth, alpha, beta):
     if depth <= 0:
       #print("*"*(3-depth) + " bottomed out")
       return self.evaluationScore(myPos, enemyPos) # Max depth heuristic
 
     if myPos[0] == enemyPos[0] and myPos[1] == enemyPos[1]:
-      return -100 # We are on the enemy and die. This is bad!
+      #print("~We walked into enemy, score -1")
+      return -1 # We are on the enemy and die. This is bad!
 
     ownActions = self.getMovesFromLayout(myPos)
-    bestScore = -1
-    bestMove = None
+    #print("*"*(6-depth) + str(ownActions) + " when friend at (" + str(myPos[0]) + ", " + str(myPos[1]) + ")")
+
+    bestScore = -10000
     for action in ownActions:
-      print("*"*(6-depth) + " friend goes " + action)
+      #print("*"*(6-depth) + " friend goes " + action)
       newPos = self.updatePos(myPos, action)
-      moveScore = self.minMove(newPos, enemyPos, depth-1)
-      if moveScore > bestScore:
-        bestMove = action
-        bestScore = moveScore
+      moveScore = self.minMove(newPos, enemyPos, depth-1, alpha, beta)
+      bestScore = max(moveScore, bestScore)
+      if bestScore >= beta:
+        return bestScore # Beta pruning
+      else:
+        alpha = max(alpha, bestScore)
+
     return bestScore #We will pick the move that gives the highest score (greatest distance)
   
   def evaluationScore(self, myPos, enemyPos):
     myPos = (myPos[0], myPos[1])
     enemyPos = (enemyPos[0], enemyPos[1])
     distToEnemy = self.getMazeDistance(myPos, enemyPos)
-    #distToHome = self.getMazeDistance(myPos, self.homebase)
-
-    return distToEnemy
+    distToHome = self.getMazeDistance(myPos, self.homebase)
+    #print("score be " + str(distToEnemy + 1.0/distToHome))
+    return distToEnemy + 1.0/distToHome
 
 class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''
   hasBeenPacman = False
 
-  def chooseAction(self, gameState):
+  def chooseAction(self, oldGameState):
     '''Choses action for the defensive agent given the state'''
+    gameState = self.getSuccessor(oldGameState, 'Stop')
+
     self.currentState = gameState
 
     if (not self.hasBeenPacman) and gameState.getAgentState(self.index).isPacman:

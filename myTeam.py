@@ -53,12 +53,14 @@ class BasicAgent(CaptureAgent):
   You should look at baselineTeam.py for more details about how to
   create an agent as this is the bare minimum.
   """
+  isRed = None            # Indicates if we are on the Red team (left side) or the Blue team (right side)
   homebase = None         # Starting position
   layout = None           # A simple map of the currrent layout with only walls (% symbol) and non-walls (blank space)
   currentState = None     # The current gamestate
   defenders = None        # List of visible enemy agents on their own field half
   ownBoundary = None      # List of locations (x, y) that form our boundary against the enemy half of the field
-  # Potentially use this to consider the powerups and improve thinking
+  enemyCapsules = []      # Capsules we can eat to power up
+  ownCapsules = []        # Capsules the enemy can eat to power up
 
   def registerInitialState(self, gameState):
     """
@@ -80,10 +82,14 @@ class BasicAgent(CaptureAgent):
     CaptureAgent.registerInitialState in captureAgents.py.
     '''
     CaptureAgent.registerInitialState(self, gameState)
+
+    # Figures out which team you are based on if your starting point is in the left or the right half of the field
+    width = len(gameState.data.layout.layoutText[0])
+    self.isRed = gameState.getAgentState(self.index).getPosition()[0] < width/2
+    
+    self.registerCapsules(gameState, width)
     self.layout = self.stripLayout(gameState.data.layout)
     self.ownBoundary = self.getBoundary(gameState)
-
-
 
   def getBoundary(self, gameState):
     '''Compiles all boundary points (where our half of the field meets the enemy field'''
@@ -92,38 +98,50 @@ class BasicAgent(CaptureAgent):
     pos = gameState.getAgentState(self.index).getPosition() # Agent starting position
 
     # If starting on the left side our boundary is on the left line
-    bound_x = width/2 -1 if pos[0] < width/2 else width/2
+    bound_x = width/2 -1 if self.isRed else width/2
+    
+
     #print("Boundary at bound_x")
 
     # Gets all points (bound_x, y) on the boundary that aren't walls
-    boundary = [(bound_x, i) for i in range(height) if self.layout[-i-1][bound_x] == ' ']
-    #print(boundary)
+    boundary = [(bound_x, i) for i in range(height) if self.layout[-i-1][bound_x] != '%']
+    #print(boundary)  
 
     self.debugDraw(boundary, [0.0, 1.0, 0.7], False)
     return boundary
   
   def getClosestBoundary(self, pos):
-
     dists = [self.getMazeDistance(pos, a) for a in self.ownBoundary]
     closestBoundary = self.ownBoundary[dists.index(min(dists))]
     #self.debugDraw([closestBoundary], [0.5,0.5,0.5], False)
     return closestBoundary
 
+  def registerCapsules(self, gameState, width):
+    capsules = gameState.data.layout.capsules
+    bluesCapsules = [capsulePos for capsulePos in capsules if capsulePos[0] >= width/2]
+    redsCapsules = [capsulePos for capsulePos in capsules if capsulePos[0] < width/2]
+    if self.isRed:
+      self.ownCapsules = redsCapsules
+      self.enemyCapsules = bluesCapsules
+    else:
+      self.ownCapsules = bluesCapsules
+      self.enemyCapsules = redsCapsules
+
   def getMovesFromLayout(self, pos):
     '''Returns legal moves from position and stripped map (used for minmax)'''
     #print("Checking position (" + str(pos[0]) + ", " + str(pos[1]) + ")")
     x = int(-pos[1]-1)
-    y = int(pos[0]-1+1)
+    y = int(pos[0])
     moves = []
-    if self.layout[x][y-1] == ' ':
+    if self.layout[x][y-1] != '%':
       moves.append('West')
     #if self.layout[x][y] == ' ':
     #  moves.append('Stop')
-    if self.layout[x][y+1] == ' ':
+    if self.layout[x][y+1] != '%':
       moves.append('East')
-    if self.layout[x-1][y] == ' ':
+    if self.layout[x-1][y] != '%':
       moves.append('North')
-    if self.layout[x+1][y] == ' ':
+    if self.layout[x+1][y] != '%':
       moves.append('South')
     return moves
 
@@ -133,10 +151,10 @@ class BasicAgent(CaptureAgent):
     layout = layoutRaw.layoutText
     print("Original version:")
     print(layout)
-    for row in layout:
+    for i, row in enumerate(layout):
       newRow = ''
-      for i in range(len(row)):
-        if row[i] == '%':
+      for j in range(len(row)):
+        if row[j] == '%':
           newRow += '%'
         else:
           newRow += ' '
@@ -220,9 +238,9 @@ class BasicAgent(CaptureAgent):
 
 class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
-  goingHome = False  # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
-  foodToChase = None  # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
-
+  goingHome = False     # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
+  foodToChase = None    # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
+  
   def chooseAction(self, oldGameState):
     '''Picks the offensive agents next move given current state'''
     gameState = self.getSuccessor(oldGameState, 'Stop')
@@ -237,6 +255,8 @@ class OffensiveAgent(BasicAgent):
     self.currentState = gameState
 
     self.debugDraw([myPos], [1.0,1.0,1.0], True)
+    self.debugDraw(self.ownCapsules, [0,0,1])
+    self.debugDraw(self.enemyCapsules, [1,0,0])
 
     # Register base position at the start of the game
     if self.homebase == None:

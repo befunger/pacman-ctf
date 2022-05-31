@@ -148,8 +148,8 @@ class BasicAgent(CaptureAgent):
     '''Creates a layout map with only walls (%) and empty spaces (spacebar)'''
     strippedLayout = []
     layout = layoutRaw.layoutText
-    print("Original version:")
-    print(layout)
+    #print("Original version:")
+    #print(layout)
     for i, row in enumerate(layout):
       newRow = ''
       for j in range(len(row)):
@@ -158,8 +158,8 @@ class BasicAgent(CaptureAgent):
         else:
           newRow += ' '
       strippedLayout.append(newRow)
-    print("Stripped version:")
-    print(strippedLayout)
+    #print("Stripped version:")
+    #print(strippedLayout)
     return strippedLayout
 
   def updatePos(self, pos, action):
@@ -460,7 +460,7 @@ class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
   goingHome = False     # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
   foodToChase = None    # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
-  verbose = False
+  verbose = True
   algo = 2
   
 
@@ -530,7 +530,7 @@ class OffensiveAgent(BasicAgent):
       
           
 
-    elif self.algo ==2:
+    elif self.algo == 2:
         gameState = self.getSuccessor(oldGameState, 'Stop')
         myPos = gameState.getAgentState(self.index).getPosition()
         foodList = self.getFood(gameState).asList()
@@ -563,6 +563,10 @@ class OffensiveAgent(BasicAgent):
                   goal = self.getClosestBoundary(myPos)
                 else:
                   goal = self.getClosestFood(gameState)
+                  if self.capsuleAvailable(gameState):                  
+                    cap = self.getClosestCapsule(gameState)
+                    if self.getMazeDistance(myPos, cap) < 3 * self.getMazeDistance(myPos, goal):
+                      goal = cap
 
               # Enemy is close but not scared (or not scared for long)
               else:
@@ -574,6 +578,10 @@ class OffensiveAgent(BasicAgent):
                 goal = self.getClosestBoundary(myPos)
               else:
                 goal = self.getClosestFood(gameState)
+                if self.capsuleAvailable(gameState):                  
+                  cap = self.getClosestCapsule(gameState)
+                  if self.getMazeDistance(myPos, cap) < 2 * self.getMazeDistance(myPos, goal):
+                    goal = cap
 
         # We are not in enemy ground
         else:
@@ -586,7 +594,7 @@ class OffensiveAgent(BasicAgent):
                 goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
     
     if self.verbose: print(goal)
-    if self.verbose: self.debugDraw([goal], [0,1,0], False)
+    if self.verbose: self.debugDraw([goal], [0,1,0], True)
     actions = gameState.getLegalActions(self.index)
     actions.remove('Stop') # Never allow standing still (does not really contribute to anything)
     best_action = self.getActionTowardsPoint(gameState, actions, goal)
@@ -705,6 +713,13 @@ class OffensiveAgent(BasicAgent):
         return foodList[foodDist.index(minDistance)]
     else:
         return None
+
+  def getClosestCapsule(self, gameState):
+    capsules = self.getCapsules(gameState)
+    dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), capsule) for capsule in capsules]
+    indexOfClosest = dists.index(min(dists))
+    return capsules[indexOfClosest]
+
  
 
 

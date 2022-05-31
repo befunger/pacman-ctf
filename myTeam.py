@@ -103,7 +103,7 @@ class BasicAgent(CaptureAgent):
     boundary = [(bound_x, i) for i in range(height) if self.layout[-i-1][bound_x] != '%']
     #print(boundary)  
 
-    self.debugDraw(boundary, [0.0, 1.0, 0.7], False)
+    #self.debugDraw(boundary, [0.0, 1.0, 0.7], False)
     return boundary
   
   def getClosestBoundary(self, pos):
@@ -461,7 +461,7 @@ class OffensiveAgent(BasicAgent):
   goingHome = False     # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
   foodToChase = None    # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
   verbose = False
-  algo = 1
+  algo = 2
   
 
   def chooseAction(self, oldGameState):
@@ -518,7 +518,7 @@ class OffensiveAgent(BasicAgent):
             myPos = gameState.getAgentState(self.index).getPosition()
             foodDist = [self.getMazeDistance(myPos, food) for food in foodList]
             minDistance = min(foodDist)
-            if numInMouth > 40 / minDistance or numInMouth > 7:
+            if numInMouth > 40 / minDistance or numInMouth > 7: # or if only 2 food left
               goal = self.getClosestBoundary(myPos)
               self.debugDraw([goal], [0,0,1], False)
             else:
@@ -532,20 +532,50 @@ class OffensiveAgent(BasicAgent):
 
     elif self.algo ==2:
         gameState = self.getSuccessor(oldGameState, 'Stop')
+        myPos = gameState.getAgentState(self.index).getPosition()
+        foodList = self.getFood(gameState).asList()
+        minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
 
-        # are in ememy ground?
+        # Are we in enemy ground?
         if gameState.getAgentState(self.index).isPacman:
-            # is enemy scared?
-            if powerPacman:
-                # is time running out?
-                if  self.powerUpTime < 10:
-                    # is pacman ready to go home?
-                    goal = None
-                else:
-                    # is ghost closeby 
-                    goal = None
-                
+            numInMouth = gameState.getAgentState(self.index).numCarrying
+            foodCount = len(self.getFood(gameState).asList())
 
+            enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
+            defenders = [a for a in enemies if (not a.isPacman) and a.getPosition() != None]
+            if len(defenders) > 0:
+              dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in defenders]
+              indexOfClosest = dists.index(min(dists))
+              closestEnemy = defenders[indexOfClosest]
+              enemyNearby = min(dists) < 5 # To prevent from triggering if the other agent sees a ghost that is nowhere near attacker
+            else:
+              enemyNearby = False
+            
+
+            # Is there an enemy nearby?
+            if enemyNearby:
+
+              powerTimeLeft = closestEnemy.scaredTimer # Hopefully this is 0 if enemy is not scared...
+              
+              # Is enemy scared for much longer?
+              if powerTimeLeft > 5:
+                if numInMouth > 40 / minDistance or numInMouth > 5 or foodCount <= 2:
+                  goal = self.getClosestBoundary(myPos)
+                else:
+                  goal = self.getClosestFood(gameState)
+
+              # Enemy is close but not scared (or not scared for long)
+              else:
+                return self.minMaxEscape(myPos, closestEnemy.getPosition(), 9)
+            
+            # There is no nearby enemy
+            else:
+              if numInMouth > 40 / minDistance or numInMouth > 7 or foodCount <= 2:
+                goal = self.getClosestBoundary(myPos)
+              else:
+                goal = self.getClosestFood(gameState)
+
+        # We are not in enemy ground
         else:
             #go to closest enemy food
             if self.getClosestFood(gameState)!=None:
@@ -652,8 +682,8 @@ class OffensiveAgent(BasicAgent):
   def powerPacman(self, gameState):
     enemies = self.getOpponents(gameState)
     for enemy in enemies:
-        if gameState.getAgentState(opponent).scaredTimer > 1:
-            self.powerUpTime = gameState.getAgentState(opponent).scaredTimer
+        if gameState.getAgentState(enemy).scaredTimer > 1:
+            self.powerUpTime = gameState.getAgentState(enemy).scaredTimer
             return True
     return False
 
@@ -667,7 +697,7 @@ class OffensiveAgent(BasicAgent):
         return False
 
   def getClosestFood(self, gameState):
-    foods = self.getFood(gameState).asList()
+    foodList = self.getFood(gameState).asList()
     if len(foodList) > 0:
         myPos = gameState.getAgentState(self.index).getPosition()
         foodDist = [self.getMazeDistance(myPos, food) for food in foodList]

@@ -107,6 +107,7 @@ class BasicAgent(CaptureAgent):
     return boundary
   
   def getClosestBoundary(self, pos):
+    '''Gets the closest boundary point to the provided position (useful when trying to get home ASAP)'''
     dists = [self.getMazeDistance(pos, a) for a in self.ownBoundary]
     closestBoundary = self.ownBoundary[dists.index(min(dists))]
     #self.debugDraw([closestBoundary], [0.5,0.5,0.5], False)
@@ -114,6 +115,7 @@ class BasicAgent(CaptureAgent):
 
 
   def registerCapsules(self, gameState, width):
+    '''Precalculates the position of the capsule powerups'''
     capsules = gameState.data.layout.capsules
     bluesCapsules = [capsulePos for capsulePos in capsules if capsulePos[0] >= width/2]
     redsCapsules = [capsulePos for capsulePos in capsules if capsulePos[0] < width/2]
@@ -161,6 +163,7 @@ class BasicAgent(CaptureAgent):
     return strippedLayout
 
   def updatePos(self, pos, action):
+    ''''Helper function for updating the position in min-max algorithm'''
     fromDirToCoordinate = {'Stop' : [0, 0], 'North' : [0, 1], 'South' : [0, -1], 'West' : [-1, 0], 'East' : [1, 0]}
     change = fromDirToCoordinate[action]
     change[0] += pos[0]
@@ -330,6 +333,7 @@ class OffensiveAgent(BasicAgent):
     return bestMove #Returns move that gives best node given optimal play from both sides
 
   def minMove(self, myPos, enemyPos, depth, alpha, beta):
+    '''Simulates enemy move, tries to minimise the heuristic'''
     if depth <= 0:
       #print("*"*(3-depth) + " bottomed out")
       return self.evaluationScore(myPos, enemyPos) # Max depth heuristic
@@ -354,6 +358,7 @@ class OffensiveAgent(BasicAgent):
     return lowestScore #The enemy will pick the move that gives the lowest score (enemy closest to us)
 
   def maxMove(self, myPos, enemyPos, depth, alpha, beta):
+    '''Simulates our move, tries to maximise the heuristic'''
     if depth <= 0:
       #print("*"*(3-depth) + " bottomed out")
       return self.evaluationScore(myPos, enemyPos) # Max depth heuristic
@@ -379,6 +384,7 @@ class OffensiveAgent(BasicAgent):
     return bestScore #We will pick the move that gives the highest score (greatest distance)
   
   def evaluationScore(self, myPos, enemyPos):
+    '''The heuristic function used to evaluate board position at max depth'''
     myPos = (myPos[0], myPos[1])
     enemyPos = (enemyPos[0], enemyPos[1])
     distToEnemy = self.getMazeDistance(myPos, enemyPos)

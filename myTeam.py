@@ -460,7 +460,7 @@ class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
   goingHome = False     # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
   foodToChase = None    # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
-  verbose = True
+  verbose = False
   algo = 2
   
 
@@ -615,7 +615,7 @@ class OffensiveAgent(BasicAgent):
       #print("* friend goes " + action)
       newPos = self.updatePos(myPos, action)
       moveScore = self.minMove(newPos, enemyPos, maxDepth-1, alpha=-10000, beta=10000)
-      print(action + " gives score " + str(moveScore))
+      if self.verbose: print(action + " gives score " + str(moveScore))
       if moveScore > bestScore:
         bestMove = action
         bestScore = moveScore
@@ -858,7 +858,7 @@ class DefensiveAgent(BasicAgent):
         if (not self.hasBeenPacman) and gameState.getAgentState(self.index).isPacman:
           self.hasBeenPacman = True
           if self.verbose: print("FINAL HOME POSITION SET TO: ")
-          print(self.homebase)
+          if self.verbose: print(self.homebase)
 
         if self.hasBeenPacman == False:
           prev = self.getPreviousObservation()

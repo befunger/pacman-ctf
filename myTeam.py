@@ -107,6 +107,7 @@ class BasicAgent(CaptureAgent):
     return boundary
   
   def getClosestBoundary(self, pos):
+    '''Gets the closest boundary point to the provided position (useful when trying to get home ASAP)'''
     dists = [self.getMazeDistance(pos, a) for a in self.ownBoundary]
     closestBoundary = self.ownBoundary[dists.index(min(dists))]
     #self.debugDraw([closestBoundary], [0.5,0.5,0.5], False)
@@ -114,6 +115,7 @@ class BasicAgent(CaptureAgent):
 
 
   def registerCapsules(self, gameState, width):
+    '''Precalculates the position of the capsule powerups'''
     capsules = gameState.data.layout.capsules
     bluesCapsules = [capsulePos for capsulePos in capsules if capsulePos[0] >= width/2]
     redsCapsules = [capsulePos for capsulePos in capsules if capsulePos[0] < width/2]
@@ -161,6 +163,7 @@ class BasicAgent(CaptureAgent):
     return strippedLayout
 
   def updatePos(self, pos, action):
+    ''''Helper function for updating the position in min-max algorithm'''
     fromDirToCoordinate = {'Stop' : [0, 0], 'North' : [0, 1], 'South' : [0, -1], 'West' : [-1, 0], 'East' : [1, 0]}
     change = fromDirToCoordinate[action]
     change[0] += pos[0]
@@ -235,35 +238,35 @@ class BasicAgent(CaptureAgent):
 
   ### HMM Code###
   def _init_HMM(self, N, M, variance):
-        """
-        Initialize A, B, pi
-        N - no of states in HMM model
-        M - no of observations
-        """
-        self.A = [[0.0 for j in range(N)] for i in range(N)]
-        self.B = [[0.0 for j in range(M)] for i in range(N)]
-        self.pi = [[0.0 for j in range(N)]]
+    """
+    Initialize A, B, pi
+    N - no of states in HMM model
+    M - no of observations
+    """
+    self.A = [[0.0 for j in range(N)] for i in range(N)]
+    self.B = [[0.0 for j in range(M)] for i in range(N)]
+    self.pi = [[0.0 for j in range(N)]]
         
-        for i in range(N):
-            row_sch = 0
-            for j in range(N-1):
-                self.A[i][j]= abs(random.gauss(1/N, variance))
-                row_sch += self.A[i][j]
-            self.A[i][N-1] = 1 - row_sch
-            
-            row_sch = 0
-            for j in range(M-1):
-                self.B[i][j]= abs(random.gauss(1/M, variance))
-                row_sch += self.B[i][j]
-            self.B[i][M-1] = 1 - row_sch
-        
+    for i in range(N):
         row_sch = 0
         for j in range(N-1):
-            self.pi[0][j]= abs(random.gauss(1/N, variance))
-            row_sch += self.pi[0][j]
-        self.pi[0][N-1] = 1 - row_sch    
+            self.A[i][j]= abs(random.gauss(1/N, variance))
+            row_sch += self.A[i][j]
+        self.A[i][N-1] = 1 - row_sch
             
-        return A, B, pi
+        row_sch = 0
+        for j in range(M-1):
+            self.B[i][j]= abs(random.gauss(1/M, variance))
+            row_sch += self.B[i][j]
+        self.B[i][M-1] = 1 - row_sch
+        
+    row_sch = 0
+    for j in range(N-1):
+        self.pi[0][j]= abs(random.gauss(1/N, variance))
+        row_sch += self.pi[0][j]
+    self.pi[0][N-1] = 1 - row_sch    
+            
+    return A, B, pi
 
   def alphaPass(self, A, B, pi, O):
     """
@@ -560,6 +563,7 @@ class OffensiveAgent(BasicAgent):
 
     return best_action
 
+
   def minMaxEscape(self, myPos, enemyPos, maxDepth):
     '''Uses minmax algorithm to pick best moves to escape'''
     if self.verbose: print("Calling MINMAX with depth " + str(maxDepth))
@@ -582,6 +586,7 @@ class OffensiveAgent(BasicAgent):
     return bestMove #Returns move that gives best node given optimal play from both sides
 
   def minMove(self, myPos, enemyPos, depth, alpha, beta):
+    '''Simulates enemy move, tries to minimise the heuristic'''
     if depth <= 0:
       #print("*"*(3-depth) + " bottomed out")
       return self.evaluationScore(myPos, enemyPos) # Max depth heuristic
@@ -606,6 +611,7 @@ class OffensiveAgent(BasicAgent):
     return lowestScore #The enemy will pick the move that gives the lowest score (enemy closest to us)
 
   def maxMove(self, myPos, enemyPos, depth, alpha, beta):
+    '''Simulates our move, tries to maximise the heuristic'''
     if depth <= 0:
       #print("*"*(3-depth) + " bottomed out")
       return self.evaluationScore(myPos, enemyPos) # Max depth heuristic
@@ -631,6 +637,7 @@ class OffensiveAgent(BasicAgent):
     return bestScore #We will pick the move that gives the highest score (greatest distance)
   
   def evaluationScore(self, myPos, enemyPos):
+    '''The heuristic function used to evaluate board position at max depth'''
     myPos = (myPos[0], myPos[1])
     enemyPos = (enemyPos[0], enemyPos[1])
     distToEnemy = self.getMazeDistance(myPos, enemyPos)

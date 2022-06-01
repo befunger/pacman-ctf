@@ -112,6 +112,18 @@ class BasicAgent(CaptureAgent):
     #self.debugDraw([closestBoundary], [0.5,0.5,0.5], False)
     return closestBoundary
 
+  def getClosestBoundaryOrCapsule(self, pos):
+    enemyCapsules = self.getCapsules(self.currentState)
+    if len(enemyCapsules) > 0:
+      capsuleDists = [self.getMazeDistance(pos, a) for a in enemyCapsules]
+      closestCapsule = enemyCapsules[capsuleDists.index(min(capsuleDists))]
+      closestBoundary = self.getClosestBoundary(pos)
+      if self.getMazeDistance(pos, closestCapsule) > self.getMazeDistance(pos, closestBoundary):
+        return closestBoundary
+      else:
+        return closestCapsule
+    else:
+      return self.getClosestBoundary(self, pos)
 
   def registerCapsules(self, gameState, width):
     '''Precalculates the position of the capsule powerups'''
@@ -469,7 +481,7 @@ class OffensiveAgent(BasicAgent):
     # Algorithm 1
     if self.algo ==1:
         gameState = self.getSuccessor(oldGameState, 'Stop')
-
+        self.current
         # If we are on our own field, we have finished going home 
         if not gameState.getAgentState(self.index).isPacman:
           self.goingHome = False
@@ -531,6 +543,7 @@ class OffensiveAgent(BasicAgent):
 
     elif self.algo == 2:
         gameState = self.getSuccessor(oldGameState, 'Stop')
+        self.currentState = gameState
         myPos = gameState.getAgentState(self.index).getPosition()
         foodList = self.getFood(gameState).asList()
         minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
@@ -558,7 +571,7 @@ class OffensiveAgent(BasicAgent):
               
               # Is enemy scared for much longer?
               if powerTimeLeft > 5:
-                if numInMouth > 40 / minDistance or numInMouth > 5 or foodCount <= 2:
+                if numInMouth > 40 / minDistance or numInMouth > 7 or foodCount <= 2:
                   goal = self.getClosestBoundary(myPos)
                 else:
                   goal = self.getClosestFood(gameState)
@@ -634,6 +647,9 @@ class OffensiveAgent(BasicAgent):
     
     if myPos[0] == self.ownBoundaryX:
       return 100 * depth # We made it home, success! (Multiply by depth so shorter path (less depth) is better)
+    for capsulePos in self.getCapsules(self.currentState):
+      if myPos[0] == capsulePos[0] and myPos[1] == capsulePos[1]:
+        return 100 * depth # We made it to a capsule!
 
     enemyActions = self.getMovesFromLayout(enemyPos)
     #print("*"*(6-depth) + str(enemyActions) + " when enemy at (" + str(enemyPos[0]) + ", " + str(enemyPos[1]) + ")")
@@ -662,6 +678,9 @@ class OffensiveAgent(BasicAgent):
 
     if myPos[0] == self.ownBoundaryX:
       return 100 * depth # We made it home, success! (Multiply by depth so shorter path (less depth) is better)
+    for capsulePos in self.getCapsules(self.currentState):
+      if myPos[0] == capsulePos[0] and myPos[1] == capsulePos[1]:
+        return 100 * depth # We made it to a capsule!
 
     ownActions = self.getMovesFromLayout(myPos)
     #print("*"*(6-depth) + str(ownActions) + " when friend at (" + str(myPos[0]) + ", " + str(myPos[1]) + ")")
@@ -684,7 +703,9 @@ class OffensiveAgent(BasicAgent):
     myPos = (myPos[0], myPos[1])
     enemyPos = (enemyPos[0], enemyPos[1])
     distToEnemy = self.getMazeDistance(myPos, enemyPos)
-    boundaryPoint = self.getClosestBoundary(myPos)
+    
+    #boundaryPoint = self.getClosestBoundary(myPos)
+    boundaryPoint = self.getClosestBoundaryOrCapsule(myPos)
     distToHomeField = self.getMazeDistance(myPos, boundaryPoint)
     
     #dists = [self.getMazeDistance(myPos, a.getPosition()) for a in self.defenders]

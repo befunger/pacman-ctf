@@ -16,6 +16,7 @@ import random, time, util
 from game import Directions
 import game
 from util import nearestPoint
+import math
 
 #################
 # Team creation #
@@ -111,6 +112,24 @@ class BasicAgent(CaptureAgent):
     closestBoundary = self.ownBoundary[dists.index(min(dists))]
     #self.debugDraw([closestBoundary], [0.5,0.5,0.5], False)
     return closestBoundary
+
+  def getBoundaryIntercept(self):
+    '''Calculates the closest food from the enemy base, and returns the position of the boundary point that intercepts such a path'''
+    ourFoodList = self.getFoodYouAreDefending(self.currentState).asList()
+    if len(ourFoodList) > 0:
+        enemyBasePos = self.currentState.getInitialAgentPosition(self.getOpponents(self.currentState)[0])
+        foodDist = [self.getMazeDistance(enemyBasePos, food) for food in ourFoodList]
+        smallestDist = min(foodDist)
+        ourClosestFood = ourFoodList[foodDist.index(min(foodDist))]
+        
+        #Find the boundary point along this route (For this point distFromEnemyGoal + distToFood = smallestDist)
+        distViaBoundaries = [self.getMazeDistance(enemyBasePos, boundaryPos) + self.getMazeDistance(ourClosestFood, boundaryPos) for boundaryPos in self.ownBoundary]
+        interceptPos = self.ownBoundary[distViaBoundaries.index(smallestDist)]
+        
+        print("Intercept point is: ")
+        print(interceptPos)
+        #self.debugDraw([interceptPos], [0.5,0.5,0.5], False)
+        return interceptPos
 
   def getClosestBoundaryOrCapsule(self, pos):
     enemyCapsules = self.getCapsules(self.currentState)
@@ -471,7 +490,7 @@ class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
   goingHome = False     # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
   foodToChase = None    # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
-  verbose = True
+  verbose = False
   algo = 2
   
 
@@ -714,6 +733,7 @@ class OffensiveAgent(BasicAgent):
     return distToEnemy + 1.0/(distToHomeField + 1.0) #+ sum(dists)
 
   def powerPacman(self, gameState):
+    '''Returns whether we are currently buffed by capsule '''
     enemies = self.getOpponents(gameState)
     for enemy in enemies:
         if gameState.getAgentState(enemy).scaredTimer > 1:
@@ -731,6 +751,7 @@ class OffensiveAgent(BasicAgent):
         return False
 
   def getClosestFood(self, gameState):
+    '''Returns the position of the closest enemy food to our agent'''
     foodList = self.getFood(gameState).asList()
     if len(foodList) > 0:
         myPos = gameState.getAgentState(self.index).getPosition()
@@ -741,6 +762,7 @@ class OffensiveAgent(BasicAgent):
         return None
 
   def getClosestCapsule(self, gameState):
+    '''Returns the position of the closest enemy capsule'''
     capsules = self.getCapsules(gameState)
     dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), capsule) for capsule in capsules]
     indexOfClosest = dists.index(min(dists))
@@ -812,7 +834,8 @@ class DefensiveAgent(BasicAgent):
                         if self.verbose: print("Protecting boundary... ")           
             else:
                 # move towards boundary
-                goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                #goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                goal = self.getBoundaryIntercept()
                 if self.verbose: print("Protecting boundary... ")
         else:
             # move towards boundary

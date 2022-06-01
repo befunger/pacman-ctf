@@ -113,8 +113,9 @@ class BasicAgent(CaptureAgent):
     #self.debugDraw([closestBoundary], [0.5,0.5,0.5], False)
     return closestBoundary
 
-  def getBoundaryIntercept(self):
+  def getBoundaryIntercept(self, pos):
     '''Calculates the closest food from the enemy base, and returns the position of the boundary point that intercepts such a path'''
+    goal = None
     ourFoodList = self.getFoodYouAreDefending(self.currentState).asList()
     if len(ourFoodList) > 0:
         enemyBasePos = self.currentState.getInitialAgentPosition(self.getOpponents(self.currentState)[0])
@@ -124,12 +125,17 @@ class BasicAgent(CaptureAgent):
         
         #Find the boundary point along this route (For this point distFromEnemyGoal + distToFood = smallestDist)
         distViaBoundaries = [self.getMazeDistance(enemyBasePos, boundaryPos) + self.getMazeDistance(ourClosestFood, boundaryPos) for boundaryPos in self.ownBoundary]
-        interceptPos = self.ownBoundary[distViaBoundaries.index(smallestDist)]
-        
-        print("Intercept point is: ")
-        print(interceptPos)
-        #self.debugDraw([interceptPos], [0.5,0.5,0.5], False)
-        return interceptPos
+        goal = self.ownBoundary[distViaBoundaries.index(smallestDist)]
+
+    # If there is no food or the boundary point could not be found, default to closest boundary
+    if goal == None:
+      goal = self.getClosestBoundary(pos)
+    
+    #print("Intercept point is: ")
+    #print(interceptPos)
+    #self.debugDraw([interceptPos], [0.5,0.5,0.5], False)    
+    return goal
+
 
   def getClosestBoundaryOrCapsule(self, pos):
     enemyCapsules = self.getCapsules(self.currentState)
@@ -786,7 +792,7 @@ class DefensiveAgent(BasicAgent):
     if self.algo==1:
         gameState = self.getSuccessor(oldGameState, 'Stop')
         self.currentState = gameState
-
+        myPos = gameState.getAgentState(self.index).getPosition()
         # is agent in home ground?
         if gameState.getAgentState(self.index).isPacman == False:
             # are enemies in home?
@@ -798,7 +804,7 @@ class DefensiveAgent(BasicAgent):
                 visible_invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
                 if len(visible_invaders) > 0: 
                     positions = [a.getPosition() for a in visible_invaders]
-                    dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), a.getPosition()) for a in visible_invaders]
+                    dists = [self.getMazeDistance(myPos, a.getPosition()) for a in visible_invaders]
                     index_of_closest = dists.index(min(dists))
 
                     # is agent scared?
@@ -830,12 +836,12 @@ class DefensiveAgent(BasicAgent):
                         if self.verbose: print("Protecting capsule ...")
                     else:
                         # move towards boundary
-                        goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
+                        goal = self.getClosestBoundary(myPos)
                         if self.verbose: print("Protecting boundary... ")           
             else:
                 # move towards boundary
-                #goal = self.getClosestBoundary(gameState.getAgentState(self.index).getPosition())
-                goal = self.getBoundaryIntercept()
+                #goal = self.getClosestBoundary(myPos)
+                goal = self.getBoundaryIntercept(myPos)
                 if self.verbose: print("Protecting boundary... ")
         else:
             # move towards boundary

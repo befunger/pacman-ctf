@@ -55,6 +55,7 @@ class BasicAgent(CaptureAgent):
   currentState = None     # The current gamestate
   defenders = None        # List of visible enemy agents on their own field half
   ownBoundary = None      # List of locations (x, y) that form our boundary against the enemy half of the field
+  ownBoundaryX = None     # Used during minmax to check if agent has reached home
   enemyCapsules = []      # Capsules we can eat to power up
   ownCapsules = []        # Capsules the enemy can eat to power up
 
@@ -91,12 +92,10 @@ class BasicAgent(CaptureAgent):
     '''Compiles all boundary points (where our half of the field meets the enemy field'''
     height = len(self.layout)
     width = len(self.layout[0])
-    pos = gameState.getAgentState(self.index).getPosition() # Agent starting position
 
     # If starting on the left side our boundary is on the left line
     bound_x = width/2 -1 if self.isRed else width/2
-    
-
+    self.ownBoundaryX = bound_x
     #print("Boundary at bound_x")
 
     # Gets all points (bound_x, y) on the boundary that aren't walls
@@ -460,7 +459,7 @@ class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
   goingHome = False     # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
   foodToChase = None    # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
-  verbose = False
+  verbose = True
   algo = 2
   
 
@@ -632,6 +631,9 @@ class OffensiveAgent(BasicAgent):
     if myPos[0] == enemyPos[0] and myPos[1] == enemyPos[1]:
       #print("~Enemy walked into us, score -1")
       return -1 # We are on the enemy and die. This is bad!
+    
+    if myPos[0] == self.ownBoundaryX:
+      return 100 * depth # We made it home, success! (Multiply by depth so shorter path (less depth) is better)
 
     enemyActions = self.getMovesFromLayout(enemyPos)
     #print("*"*(6-depth) + str(enemyActions) + " when enemy at (" + str(enemyPos[0]) + ", " + str(enemyPos[1]) + ")")
@@ -657,6 +659,9 @@ class OffensiveAgent(BasicAgent):
     if myPos[0] == enemyPos[0] and myPos[1] == enemyPos[1]:
       #print("~We walked into enemy, score -1")
       return -1 # We are on the enemy and die. This is bad!
+
+    if myPos[0] == self.ownBoundaryX:
+      return 100 * depth # We made it home, success! (Multiply by depth so shorter path (less depth) is better)
 
     ownActions = self.getMovesFromLayout(myPos)
     #print("*"*(6-depth) + str(ownActions) + " when friend at (" + str(myPos[0]) + ", " + str(myPos[1]) + ")")
@@ -685,7 +690,7 @@ class OffensiveAgent(BasicAgent):
     #dists = [self.getMazeDistance(myPos, a.getPosition()) for a in self.defenders]
     #dists = [dist for dist in dists if dist < 5]
 
-    return distToEnemy + 1.0/(distToHomeField + 5) #+ sum(dists)
+    return distToEnemy + 1.0/(distToHomeField + 1.0) #+ sum(dists)
 
   def powerPacman(self, gameState):
     enemies = self.getOpponents(gameState)

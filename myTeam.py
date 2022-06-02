@@ -17,6 +17,7 @@ from game import Directions
 import game
 from util import nearestPoint
 import math
+import util
 
 #################
 # Team creation #
@@ -600,6 +601,20 @@ class BasicAgent(CaptureAgent):
         inferred.append((gameState.getAgentState(enemy) if apprxPos else None, apprxPos))
     return inferred
   
+  def checkIfStuck(self, positions):
+    a = util.Counter()
+    for pos in positions.list:
+      a[pos] += 1
+      if a[pos] > 3:
+        return True
+    return False
+
+  def getOtherFood(self, foodToAvoid, gameState):
+    foodList = self.getFood(gameState).asList()
+    #combinedFoodDist = [self.getMazeDistance(gameState.getAgentPosition(self.index), food) - 2*self.getMazeDistance(foodToAvoid, food) for food in foodList]
+    combinedFoodDist = [self.getMazeDistance(gameState.getAgentPosition(self.index), food) - 2 * abs(foodToAvoid[1] - food[1]) for food in foodList]
+    minDistance = min(combinedFoodDist)
+    return foodList[combinedFoodDist.index(minDistance)]
 
 
 
@@ -607,12 +622,17 @@ class OffensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO COLLECT FOOD'''
   goingHome = False     # Use this for the 'Going home' state, agent should return to the nearest 'home square' (nearest boundary)
   foodToChase = None    # Use this if we pursue a specific food (To avoid an agent near the nearest food, for example)
+  foodToAvoid = None
   verbose = False
   algo = 1
-  
+  last_positions = util.Queue()
+  stuckCounter = 0
+  chaseCounter = 0
+  areStuck = False
 
   def chooseAction(self, oldGameState):
     '''Picks the offensive agents next move given current state'''
+
 
     # Algorithm 1 (Non-inference)
     if self.algo == 2:
@@ -686,7 +706,37 @@ class OffensiveAgent(BasicAgent):
         myPos = gameState.getAgentPosition(self.index)
         closestFoodDist = self.getMazeDistance(myPos, self.getClosestFood(gameState))
 
+        '''
+        # Update queue of positions
+        self.last_positions.push(myPos)
+        if len(self.last_positions.list) > 10:
+          self.last_positions.pop()
+          self.areStuck = self.checkIfStuck(self.last_positions)
+          if self.areStuck:
+            if self.verbose: print("Trapped!")
+            self.stuckCounter = 10
+            self.last_positions = util.Queue() # Reset the queue
+            self.foodToAvoid = self.getClosestFood(gameState)
+        
+        # If stuck retreat for 10 turns
+        if self.areStuck:
+          goal = self.currentState.getInitialAgentPosition(self.index)
+          self.debugDraw([self.foodToAvoid], [1.0,0,0], True)
+          self.stuckCounter -= 1
+          if self.stuckCounter <= 0:
+            self.areStuck = False
+            self.chaseCounter = 10
+            self.foodToChase = self.getOtherFood(self.foodToAvoid, gameState)
+        
+        # Advance on alternate food for 10 steps before freedom
+        elif self.chaseCounter > 0:
+          self.chaseCounter -= 1
+          goal = self.foodToChase
+          self.debugDraw([self.foodToAvoid], [1.0,0,0], True)
+          self.debugDraw([self.foodToChase], [0,1.0,0], True)
+
         # Are we in enemy ground?
+        el'''
         if gameState.getAgentState(self.index).isPacman:
             numInMouth = gameState.getAgentState(self.index).numCarrying
             foodCount = len(self.getFood(gameState).asList())  
@@ -739,7 +789,7 @@ class OffensiveAgent(BasicAgent):
         else:
             # go for capsule if it is not far from you else go to closest enemy food
             if self.capsuleAvailable(gameState) and self.getClosestFood(gameState)!=None:
-                if (self.getMazeDistance(myPos,self.getClosestCapsule(gameState)) - closestFoodDist) < 5:
+                if (self.getMazeDistance(myPos,self.getClosestCapsule(gameState)) - closestFoodDist) < 8:
                     goal = self.getClosestCapsule(gameState)
                     if self.verbose: print("Reach for closest capsule")
                 else:

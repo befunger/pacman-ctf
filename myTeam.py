@@ -68,7 +68,7 @@ class BasicAgent(CaptureAgent):
   ownCapsules = []        # Capsules the enemy can eat to power up
   observed_enemies = []   # List of enemies and their apprxPos inferred on fields
   verbose = False         # View print comments
-  graphics = False        # View debug graphics
+  graphics = True       # View debug graphics
   algo = 1                # Run algo 1
 
   def registerInitialState(self, gameState):
@@ -617,7 +617,7 @@ class BasicAgent(CaptureAgent):
   def getApprxPos(self, enemy):
     ''' get approximate position'''
     obs = list(self._observe.items())
-    if obs.count(max(obs)) < 6:
+    if obs.count(max(obs)) < 5:
         return self._observe[enemy].argMax()
     else:
         return None
@@ -681,7 +681,7 @@ class OffensiveAgent(BasicAgent):
         if len(visibleGhosts) > 0:
             dists = [self.getMazeDistance(gameState.getAgentPosition(self.index), pos) for pos in ghostsPos]
             indexOfClosest = dists.index(min(dists))
-            enemyNearby = min(dists) < 5 # To prevent from triggering if the other agent sees a ghost that is nowhere near attacker
+            enemyNearby = min(dists) < 7 # To prevent from triggering if the other agent sees a ghost that is nowhere near attacker
             enemySuperNearBy = min(dists) < 4
         else:
             enemyNearby = False

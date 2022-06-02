@@ -954,12 +954,11 @@ class DefensiveAgent(BasicAgent):
                         goal = self.getClosestCapsule
                         if self.verbose: print("Protecting capsule ...")
                     else:
-                        # move towards boundary
-                        goal = self.getClosestBoundary(gameState.getAgentPosition(self.index))
+                        # move towards enemy base boundary
+                        goal = self.getBoundaryIntercept(gameState.getAgentPosition(self.index))
                         if self.verbose: print("Protecting boundary... ")           
             else:
-                # move towards boundary
-                #goal = self.getClosestBoundary(gameState.getAgentPosition(self.index))
+                # move towards enemy base boundary
                 goal = self.getBoundaryIntercept(gameState.getAgentPosition(self.index))
                 if self.verbose: print("Protecting boundary... ")
         else:

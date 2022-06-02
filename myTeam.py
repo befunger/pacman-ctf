@@ -565,7 +565,7 @@ class BasicAgent(CaptureAgent):
     teamPos = [gameState.getAgentPosition(team) for team in self.getTeam(gameState)]
     obv = util.Counter()
     for pos in self.noWalls:
-        teamDist = [team for team in teamPos if util.manhattanDistance(team, pos) <= 6]
+        teamDist = [team for team in teamPos if util.manhattanDistance(team, pos) <= 5]
         if teamDist:
             obv[pos] = 0.0
         else:
@@ -580,7 +580,7 @@ class BasicAgent(CaptureAgent):
   def getApprxPos(self, enemy):
     ''' get approximate position'''
     obs = list(self._observe.items())
-    if obs.count(max(obs)) < 6:
+    if obs.count(max(obs)) < 5:
         return self._observe[enemy].argMax()
     else:
         return None
@@ -676,38 +676,39 @@ class OffensiveAgent(BasicAgent):
             self.debugDraw([goal], [0.8,0.2,0], False)
       
           
-
+    # Algorithm 2
     elif self.algo == 2:
         gameState = self.getSuccessor(oldGameState, 'Stop')
         self.currentState = gameState
         myPos = gameState.getAgentPosition(self.index)
-        foodList = self.getFood(gameState).asList()
-        minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
+        closestFoodDist = self.getMazeDistance(myPos, self.getClosestFood(gameState))
 
         # Are we in enemy ground?
         if gameState.getAgentState(self.index).isPacman:
             numInMouth = gameState.getAgentState(self.index).numCarrying
-            foodCount = len(self.getFood(gameState).asList())
+            foodCount = len(self.getFood(gameState).asList())  
 
-            enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
-            defenders = [a for a in enemies if (not a.isPacman) and a.getPosition() != None]
-            if len(defenders) > 0:
-              dists = [self.getMazeDistance(gameState.getAgentPosition(self.index), a.getPosition()) for a in defenders]
-              indexOfClosest = dists.index(min(dists))
-              closestEnemy = defenders[indexOfClosest]
-              enemyNearby = min(dists) < 5 # To prevent from triggering if the other agent sees a ghost that is nowhere near attacker
+            # get list of visible enemies
+            if len(self.observed_enemies) == 0:
+                visibleGhosts = [a for a in [gameState.getAgentState(i) for i in self.getOpponents(gameState)] if (not a.isPacman) and a.getPosition() != None]
+                ghostsPos = [a.getPosition() for a in visibleGhosts]
             else:
-              enemyNearby = False
-            
+                visibleGhosts = [state for state, pos in self.observed_enemies if (not state.isPacman) and pos]
+                ghostsPos = [pos for state, pos in self.observed_enemies if (not state.isPacman) and pos]
+            if len(visibleGhosts) > 0:
+              dists = [self.getMazeDistance(gameState.getAgentPosition(self.index), pos) for pos in ghostsPos]
+              indexOfClosest = dists.index(min(dists))
+              enemyNearby = min(dists) < 8 # To prevent from triggering if the other agent sees a ghost that is nowhere near attacker
+            else:
+              enemyNearby = False  
 
             # Is there an enemy nearby?
             if enemyNearby:
+              powerTimeLeft = visibleGhosts[indexOfClosest].scaredTimer # Hopefully this is 0 if enemy is not scared...
 
-              powerTimeLeft = closestEnemy.scaredTimer # Hopefully this is 0 if enemy is not scared...
-              
               # Is enemy scared for much longer?
               if powerTimeLeft > 5:
-                if numInMouth > 40 / minDistance or numInMouth > 7 or foodCount <= 2:
+                if numInMouth > 40 / closestFoodDist or numInMouth > 7 or foodCount <= 2:
                   goal = self.getClosestBoundary(myPos)
                 else:
                   goal = self.getClosestFood(gameState)
@@ -718,23 +719,30 @@ class OffensiveAgent(BasicAgent):
 
               # Enemy is close but not scared (or not scared for long)
               else:
-                return self.minMaxEscape(myPos, closestEnemy.getPosition(), 9)
+                return self.minMaxEscape(myPos, ghostsPos[indexOfClosest], 9)
             
             # There is no nearby enemy
             else:
-              if numInMouth > 40 / minDistance or numInMouth > 7 or foodCount <= 2:
+              if numInMouth > 40 / closestFoodDist or numInMouth > 7 or foodCount <= 2:
                 goal = self.getClosestBoundary(myPos)
               else:
                 goal = self.getClosestFood(gameState)
                 if self.capsuleAvailable(gameState):                  
                   cap = self.getClosestCapsule(gameState)
-                  if self.getMazeDistance(myPos, cap) < 2 * self.getMazeDistance(myPos, goal):
+                  if (self.getMazeDistance(myPos, cap) - self.getMazeDistance(myPos, goal)) < 5:
                     goal = cap
 
         # We are not in enemy ground
         else:
-            #go to closest enemy food
-            if self.getClosestFood(gameState)!=None:
+            # go for capsule if it is not far from you else go to closest enemy food
+            if self.capsuleAvailable(gameState) and self.getClosestFood(gameState)!=None:
+                if (self.getMazeDistance(myPos,self.getClosestCapsule(gameState)) - closestFoodDist) < 5:
+                    goal = self.getClosestCapsule(gameState)
+                    if self.verbose: print("Reach for closest capsule")
+                else:
+                    goal = self.getClosestFood(gameState)
+                    if self.verbose: print("Reach for closest food")
+            elif self.getClosestFood(gameState)!=None:
                 goal = self.getClosestFood(gameState)
                 if self.verbose: print("Reach for closest food")
             else:
@@ -860,27 +868,19 @@ class OffensiveAgent(BasicAgent):
   def capsuleAvailable(self, gameState):
     '''finds if any capsule available'''
     currFoods = self.getCapsules(gameState)
-    if len(currFoods) > 0:
-        self.targetCapsule = currFoods[0]
-        return True
-    else:
-        return False
+    return len(currFoods) > 0
 
   def getClosestFood(self, gameState):
     '''Returns the position of the closest enemy food to our agent'''
     foodList = self.getFood(gameState).asList()
-    if len(foodList) > 0:
-        myPos = gameState.getAgentState(self.index).getPosition()
-        foodDist = [self.getMazeDistance(myPos, food) for food in foodList]
-        minDistance = min(foodDist)
-        return foodList[foodDist.index(minDistance)]
-    else:
-        return None
+    foodDist = [self.getMazeDistance(gameState.getAgentPosition(self.index), food) for food in foodList]
+    minDistance = min(foodDist)
+    return foodList[foodDist.index(minDistance)]
 
   def getClosestCapsule(self, gameState):
     '''Returns the position of the closest enemy capsule'''
     capsules = self.getCapsules(gameState)
-    dists = [self.getMazeDistance(gameState.getAgentState(self.index).getPosition(), capsule) for capsule in capsules]
+    dists = [self.getMazeDistance(gameState.getAgentPosition(self.index), capsule) for capsule in capsules]
     indexOfClosest = dists.index(min(dists))
     return capsules[indexOfClosest]
 
@@ -951,7 +951,7 @@ class DefensiveAgent(BasicAgent):
                         goal = self.lastMissingFood
                         if self.verbose: print("Chasing invisible enemies ...")
                     elif self.capsuleAvailable(gameState):
-                        goal = self.protectCapsule
+                        goal = self.getClosestCapsule
                         if self.verbose: print("Protecting capsule ...")
                     else:
                         # move towards boundary
@@ -972,7 +972,6 @@ class DefensiveAgent(BasicAgent):
         actions = gameState.getLegalActions(self.index)
         best_action = self.getActionTowardsPoint(gameState, actions, goal)
     
-
 
     # Algorithm 2: Protect boundary 
     elif self.algo==2:
@@ -1151,8 +1150,11 @@ class DefensiveAgent(BasicAgent):
   def capsuleAvailable(self, gameState):
     '''finds if any capsule available'''
     currFoods = self.getCapsulesYouAreDefending(gameState)
-    if len(currFoods) > 0:
-        self.protectCapsule = currFoods[0]
-        return True
-    else:
-        return False
+    return len(currFoods) > 0
+
+  def getClosestCapsule(self, gameState):
+    '''Returns the position of our closest capsule'''
+    capsules = self.getCapsulesYouAreDefending(gameState)
+    dists = [self.getMazeDistance(gameState.getAgentPosition(self.index), capsule) for capsule in capsules]
+    indexOfClosest = dists.index(min(dists))
+    return capsules[indexOfClosest]

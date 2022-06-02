@@ -698,10 +698,10 @@ class OffensiveAgent(BasicAgent):
 
               # Is enemy scared for much longer?
               if powerTimeLeft > 5:
-                if enemySuperNearBy: # eat enemy if enemy is super close
-                    goal = ghostsPos[indexOfClosest]
-                elif numInMouth > 40 / closestFoodDist or numInMouth > 7 or foodCount <= 2:
+                if numInMouth > 40 / closestFoodDist or numInMouth > 7 or foodCount <= 2:
                   goal = self.getClosestBoundary(myPos)
+                elif enemySuperNearBy: # eat enemy if enemy is super close
+                    goal = ghostsPos[indexOfClosest]
                 else:
                   goal = self.getClosestFood(gameState)
                   if self.capsuleAvailable(gameState):                  
@@ -711,7 +711,7 @@ class OffensiveAgent(BasicAgent):
 
               # Enemy is close but not scared (or not scared for long)
               else:
-                return self.minMaxEscape(myPos, ghostsPos[indexOfClosest], 9)
+                return self.minMaxEscape(myPos, ghostsPos[indexOfClosest], 10)
             
             # There is no nearby enemy
             else:
@@ -788,7 +788,7 @@ class OffensiveAgent(BasicAgent):
 
               # Enemy is close but not scared (or not scared for long)
               else:
-                return self.minMaxEscape(myPos, closestEnemy.getPosition(), 9)
+                return self.minMaxEscape(myPos, closestEnemy.getPosition(), 10)
             
             # There is no nearby enemy
             else:
@@ -848,7 +848,7 @@ class OffensiveAgent(BasicAgent):
 
           index_of_closest = dists.index(min(dists))
           self.debugDraw([positions[index_of_closest]], [0.5,0.5,0.5], False)
-          return self.minMaxEscape(myPos, positions[index_of_closest], 9)
+          return self.minMaxEscape(myPos, positions[index_of_closest], 10)
           #return self.getActionAwayFromPoint(gameState, actions, positions[index_of_closest])
 
         #elif min(dists) < 5:

@@ -88,6 +88,7 @@ class BasicAgent(CaptureAgent):
     self.registerCapsules(gameState, width)
     self.layout = self.stripLayout(gameState.data.layout)
     self.ownBoundary = self.getBoundary(gameState)
+    self.initializeTracking(gameState)
 
   def getBoundary(self, gameState):
     '''Compiles all boundary points (where our half of the field meets the enemy field'''
@@ -148,7 +149,7 @@ class BasicAgent(CaptureAgent):
       else:
         return closestCapsule
     else:
-      return self.getClosestBoundary(self, pos)
+      return self.getClosestBoundary(pos)
 
   def registerCapsules(self, gameState, width):
     '''Precalculates the position of the capsule powerups'''
@@ -272,7 +273,33 @@ class BasicAgent(CaptureAgent):
 
     return best_action  
 
-  ### HMM Code###
+  def invadersCount(self, gameState):
+    ''' get the count of enemy invaders'''
+    enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
+    invaders = [a for a in enemies if a.isPacman]
+    return len(invaders)
+
+  def ghostsCount(self, gameState):
+    ''' get the count of enemy ghosts'''
+    enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
+    ghosts = [a for a in enemies if not a.isPacman]
+    return len(ghosts)
+
+  def allMissingFood(self, gameState):
+    '''finds where food goes missing'''
+    prevState = self.getPreviousObservation()
+    prevFoods = self.getFoodYouAreDefending(prevState).asList()
+    currFoods = self.getFoodYouAreDefending(gameState).asList()
+    missFoods = []
+    if len(prevFoods) != len(currFoods):
+        for food in prevFoods:
+            if food not in currFoods:
+                missFoods.append(food)
+        return missFoods
+    else:
+        return None
+
+  ### HMM Code ###
   def _init_HMM(self, N, M, variance):
     """
     Initialize A, B, pi
@@ -456,7 +483,7 @@ class BasicAgent(CaptureAgent):
 
     return A, B, pi
 
-  ### Tracking Code###
+  ### Tracking Code with HMM ###
   def initializeTracking(self, gameState):
     '''Initialze an HMM for each opponent'''
     N = 2
@@ -487,6 +514,45 @@ class BasicAgent(CaptureAgent):
         prob.append(self.evaluate(C))
     
         g = prob.index()
+
+  ### Tracking Code with Bayesian inference ###
+  def initializeTracking(self, gameState):
+    ''' initialize BI tracking'''
+    self.noWalls = gameState.getWalls().asList(False)
+    self._observe = {}
+    for enemy in self.getOpponents(gameState):
+        self.initializeBeliefs(enemy, gameState)
+  
+  def initializeBeliefs(self, enemy, gameState):
+    '''Initialize uniform beliefs'''
+    enemyPos = gameState. getInitialAgentPosition(enemy)
+    self._observe[enemy] = util.Counter()
+    self._observe[enemy][enemyPos] = 1.0
+
+  def updateTruePos(self, enemy, pos):
+    ''' update probability of true position'''
+    obv = util.Counter()
+    obv[pos] = 1.0
+    self._observe[enemy] = obv
+
+  def timeElapsedBeliefs(self, enemy, gameState):
+    '''update  over time'''
+    allprobPos = lambda x, y: [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+    obv = util.Counter()
+    for prevPos, prevProb in self._observe[enemy].items():
+        newObv = util.Counter()
+        for pos in allprobPos(prevPos[0], prevPos[1]):
+            if pos in self.noWalls:
+                newObv[pos] = 1.0
+        newObv.normalize()
+        for newPos, newProb in newObv.items():
+            obv[newPos] += newProb * prevProb
+
+    invaderCount - self.invadersCount(gameState)
+    if gameState.getAgentState(enemy).isPacman:
+        missingFoods = self.allMissingFood(gameState)
+       
+
 
   
 
@@ -796,12 +862,10 @@ class DefensiveAgent(BasicAgent):
         # is agent in home ground?
         if gameState.getAgentState(self.index).isPacman == False:
             # are enemies in home?
-            enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
-            invaders = [a for a in enemies if a.isPacman]
-            if len(invaders)> 0:
+            if self.invadersCount(gameState) > 0:
                 if self.verbose: print("Enemy in home")
                 # are visible enemies there?
-                visible_invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
+                visible_invaders = [a for a in [gameState.getAgentState(i) for i in self.getOpponents(gameState)] if a.isPacman and a.getPosition() != None]
                 if len(visible_invaders) > 0: 
                     positions = [a.getPosition() for a in visible_invaders]
                     dists = [self.getMazeDistance(myPos, a.getPosition()) for a in visible_invaders]
@@ -867,11 +931,9 @@ class DefensiveAgent(BasicAgent):
                 if self.verbose: print("Scared! Go to boundary... ")
             else:
                 # check if enemies in home 
-                enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
-                invaders = [a for a in enemies if a.isPacman]
-                if len(invaders)> 0:
+                if self.invadersCount(gameState) > 0:
                     # check for visible enemies
-                    visible_invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
+                    visible_invaders = [a for a in [gameState.getAgentState(i) for i in self.getOpponents(gameState)] if a.isPacman and a.getPosition() != None]
                     if len(visible_invaders) > 0: 
                         # Pick the action that closes the distance to the nearest invader
                         positions = [a.getPosition() for a in visible_invaders]

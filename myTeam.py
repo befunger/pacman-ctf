@@ -68,7 +68,7 @@ class BasicAgent(CaptureAgent):
   ownCapsules = []        # Capsules the enemy can eat to power up
   observed_enemies = []   # List of enemies and their apprxPos inferred on fields
   verbose = False         # View print comments
-  graphics = True         # View debug graphics
+  graphics = True       # View debug graphics
   algo = 1                # Run algo 1
 
   def registerInitialState(self, gameState):
@@ -146,24 +146,7 @@ class BasicAgent(CaptureAgent):
     #print(interceptPos)
     #self.debugDraw([interceptPos], [0.5,0.5,0.5], False)    
     return goal
-  
-  def getEnemyPacmanPos(self, pos):
-    '''Calculates the closest boundary point if enemy entered'''
-    if self.isRed:
-        if pos[0] >= self.ownBoundaryX:
-            return pos
-        else:
-            distViaBoundaries = [self.getMazeDistance(pos, boundaryPos) for boundaryPos in self.ownBoundary]
-            return self.ownBoundary[distViaBoundaries.index(smallestDist)]
-    else:
-        if pos[0] < self.ownBoundaryX:
-            return pos
-        else:
-            distViaBoundaries = [self.getMazeDistance(pos, boundaryPos) for boundaryPos in self.ownBoundary]
-            smallestDist = min(distViaBoundaries)
-            return self.ownBoundary[distViaBoundaries.index(smallestDist)]
-
-
+    
   def getBoundaryInterceptEnemy(self, pos):
     '''Calculates the closest enemy, and returns the position of the boundary point that intercepts such a path'''
     goal = None
@@ -1057,7 +1040,6 @@ class DefensiveAgent(BasicAgent):
                 else:
                     visibleInvaders = [state for state, pos in ENEMIES if state.isPacman and pos]
                     invadersPos = [pos for state, pos in ENEMIES if state.isPacman and pos]
-                    invadersPos = [self.getEnemyPacmanPos(pos) for pos in invadersPos] ### COMMENT OUT if issue
                 if self.graphics: [self.debugDraw([pos], [100, 100, 255], True) for pos in invadersPos]
                 # are visible enemies there?
                 if len(visibleInvaders) > 0: 

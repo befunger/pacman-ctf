@@ -891,7 +891,6 @@ class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''
   hasBeenPacman = False
   lastMissingFood = None
-  protectCapsule = None
   verbose = False
   algo = 1
   if verbose: print("Algorithm: ", algo)
@@ -906,7 +905,7 @@ class DefensiveAgent(BasicAgent):
         # get infered enemy positions
         self.observed_enemies = self.inference(gameState)
        
-        self.displayDistributionsOverPositions(self._observe.values())
+        if self.verbose: self.displayDistributionsOverPositions(self._observe.values())
 
         # is agent in home ground?
         if gameState.getAgentState(self.index).isPacman == False:
@@ -951,7 +950,7 @@ class DefensiveAgent(BasicAgent):
                         goal = self.lastMissingFood
                         if self.verbose: print("Chasing invisible enemies ...")
                     elif self.capsuleAvailable(gameState):
-                        goal = self.getClosestCapsule
+                        goal = self.getClosestCapsule(gameState)
                         if self.verbose: print("Protecting capsule ...")
                     else:
                         # move towards enemy base boundary
@@ -1014,7 +1013,7 @@ class DefensiveAgent(BasicAgent):
                         goal = self.lastMissingFood
                         if self.verbose: print("Chasing invisible enemies ...")
                     elif self.capsuleAvailable(gameState):
-                        goal = self.protectCapsule
+                        goal = self.getClosestCapsule(gameState)
                         if self.verbose: print("Protecting capsule ...")
                     else:
                         # move towards boundary
@@ -1066,7 +1065,7 @@ class DefensiveAgent(BasicAgent):
                             goal = self.lastMissingFood
                             if self.verbose: print("Chasing invisible enemies ...")
                         elif self.capsuleAvailable(gameState):
-                            goal = self.protectCapsule
+                            goal = self.getClosestCapsule(gameState)
                             if self.verbose: print("Protecting capsule ...")
                         elif self.lastMissingFood!=None:
                             goal = self.lastMissingFood
@@ -1078,7 +1077,7 @@ class DefensiveAgent(BasicAgent):
                 else:
                     # protect capsule
                     if self.capsuleAvailable(gameState):
-                        goal = self.protectCapsule
+                        goal = self.getClosestCapsule(gameState)
                         if self.verbose: print("Protecting capsule ...")
                     else:
                         # move towards boundary

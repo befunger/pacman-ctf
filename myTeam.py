@@ -956,9 +956,8 @@ class DefensiveAgent(BasicAgent):
   '''AGENT THAT TRIES TO STOP ENEMY FROM GRABBING'''
   hasBeenPacman = False
   lastMissingFood = None
-  protectCapsule = None
-  verbose = True
-  algo = 2
+  verbose = False
+  algo = 1
   if verbose: print("Algorithm: ", algo)
 
   def chooseAction(self, oldGameState):
@@ -971,7 +970,7 @@ class DefensiveAgent(BasicAgent):
         # get infered enemy positions
         self.observed_enemies = self.inference(gameState)
        
-        self.displayDistributionsOverPositions(self._observe.values())
+        if self.verbose: self.displayDistributionsOverPositions(self._observe.values())
 
         # is agent in home ground?
         if gameState.getAgentState(self.index).isPacman == False:
